@@ -1,0 +1,602 @@
+
+/**
+ * Compute difference between two days using a given measure.
+ *
+ * @param mixed $date1
+ *   the starting date
+ * @param mixed $date2
+ *   the ending date
+ * @param string $measure
+ *   'years', 'months', 'weeks', 'days', 'hours', 'minutes', 'seconds'
+ * @param string $type
+ *   the type of dates provided:
+ *   DATE_OBJECT, DATE_DATETIME, DATE_ISO, DATE_UNIX, DATE_ARRAY
+ */
+function date_difference($date1_in, $date2_in, $measure = 'seconds', $type = DATE_OBJECT) {
+  // Create cloned objects or original dates will be impacted by
+  // the date_modify() operations done in this code.
+  $date1 = clone(date_convert($date1_in, $type, DATE_OBJECT));
+  $date2 = clone(date_convert($date2_in, $type, DATE_OBJECT));
+  if (is_object($date1) && is_object($date2)) {
+    $diff = date_format($date2, 'U') - date_format($date1, 'U');
+    if ($diff == 0 ) {
+      return 0;
+    }
+    elseif ($diff < 0) {
+      // Make sure $date1 is the smaller date.
+      $temp = $date2;
+      $date2 = $date1;
+      $date1 = $temp;
+      $diff = date_format($date2, 'U') - date_format($date1, 'U');
+    }
+    $year_diff = intval(date_format($date2, 'Y') - date_format($date1, 'Y'));
+    switch ($measure) {
+
+      // The easy cases first.
+      case 'seconds':
+        return $diff;
+      case 'minutes':
+        return $diff / 60;
+      case 'hours':
+        return $diff / 3600;
+      case 'years':
+        return $year_diff;
+
+      case 'months':
+        $format = 'n';
+        $item1 = date_format($date1, $format);
+        $item2 = date_format($date2, $format);
+        if ($year_diff == 0) {
+          return intval($item2 - $item1);
+        }
+        else {
+          $item_diff = 12 - $item1;
+          $item_diff += intval(($year_diff - 1) * 12);
+          return $item_diff + $item2;
+       }
+       break;
+
+      case 'days':
+        $format = 'z';
+        $item1 = date_format($date1, $format);
+        $item2 = date_format($date2, $format);
+        if ($year_diff == 0) {
+          return intval($item2 - $item1);
+        }
+        else {
+          $item_diff = date_days_in_year($date1) - $item1;
+          for ($i = 1; $i < $year_diff; $i++) {
+            date_modify($date1, '+1 year');
+            $item_diff += date_days_in_year($date1);
+          }
+          return $item_diff + $item2;
+       }
+       break;
+
+      case 'weeks':
+        $week_diff = date_format($date2, 'W') - date_format($date1, 'W');
+        $year_diff = date_format($date2, 'o') - date_format($date1, 'o');
+        for ($i = 1; $i <= $year_diff; $i++) {
+          date_modify($date1, '+1 year');
+          $week_diff += date_iso_weeks_in_year($date1);
+        }
+        return $week_diff;
+    }
+  }
+  return NULL;
+}
+
+
+/**
+ * Date conversion helper function.
+ *
+ * A variety of ways to convert dates from one type to another.
+ * No timezone conversion is done in this operation, except
+ * when handling timestamps because create_date() assumes
+ * timestamps hold the UTC value for the time.
+ *
+ * @param mixed $date
+ *   the date to convert
+ * @param string $from_type
+ *   the type of date to convert from
+ * @param string $to_type
+ *   the type of date to convert to
+ * @param string $tz
+ *   the timezone of the supplied value, only needed when using timestamps
+ *   for dates not set to UTC.
+ */
+function date_convert($date, $from_type, $to_type, $tz = 'UTC') {
+  if (empty($date) && !$date === 0) return NULL;
+  if (empty($from_type) || empty($to_type) || $from_type == $to_type) return $date;
+  switch ($from_type) {
+    case DATE_ARRAY:
+      if (!is_array($date)) return NULL;
+      if (isset($date['ampm'])) {
+        if ($date['ampm'] == 'pm' && $date['hour'] < 12) $date['hour'] += 12;
+        if ($date['ampm'] == 'am' && $date['hour'] == 12) $date['hour'] -= 12;
+      }
+      $datetime = date_pad(intval($date['year']), 4) . '-' . date_pad(intval($date['month'])) .
+            '-' . date_pad(intval($date['day'])) . ' ' . date_pad(intval($date['hour'])) .
+            ':' . date_pad(intval($date['minute'])) . ':' . date_pad(intval($date['second']));
+      switch ($to_type) {
+        case DATE_ISO:
+          return str_replace(' ', 'T', $datetime);
+        case DATE_DATETIME:
+          return $datetime;
+        case DATE_ICAL:
+          $replace = array(' ' => 'T', '-' => '', ':' => '');
+          return strtr($datetime, $replace);
+        case DATE_OBJECT:    
+          return date_create($datetime, timezone_open($tz));
+        case DATE_UNIX:
+          $obj = date_create($datetime, timezone_open($tz));
+          return date_format($obj, 'U');  
+      }
+      break;
+    case DATE_OBJECT:
+      if (!is_object($date)) return NULL;
+      $obj = $date;
+      break;
+    case DATE_DATETIME:
+    case DATE_ISO:
+      if (!preg_match(DATE_REGEX_LOOSE, $date)) return NULL;
+      $date = date_fuzzy_datetime($date);
+      $obj = date_create($date, timezone_open($tz));
+      break;
+    case DATE_ICAL:
+      if (!preg_match(DATE_REGEX_LOOSE, $date)) return NULL;
+      preg_match(DATE_REGEX_LOOSE, $date, $regs);
+      $datetime = date_pad($regs[1], 4) . '-' . date_pad($regs[2]) . '-' . date_pad($regs[3]) .
+        'T' . date_pad($regs[5]) . ':' . date_pad($regs[6]) . ':' . date_pad($regs[7]);
+      $obj = date_create($datetime, timezone_open($tz));
+      break;
+    case DATE_UNIX:
+      if (!is_numeric($date)) return NULL;
+      // Special case when creating dates with timestamps.
+      // The date_create() function will assume date is UTC value
+      // and will ignore our timezone.
+      $obj = date_create("@$date", timezone_open('UTC'));
+      date_timezone_set($obj, timezone_open($tz));
+      break;
+  }
+  switch ($to_type) {
+    case DATE_OBJECT:
+      return $obj;
+    case DATE_DATETIME:
+      return date_format($obj, DATE_FORMAT_DATETIME);
+    case DATE_ISO:
+      return date_format($obj, DATE_FORMAT_ISO);
+    case DATE_ICAL:
+      return date_format($obj, DATE_FORMAT_ICAL);
+    case DATE_UNIX:
+      return date_format($obj, 'U');
+    case DATE_ARRAY:
+      $date_array = date_array($obj);
+      // ISO dates may contain zero values for some date parts,
+      // make sure they don't get lost in the conversion.
+      if ($from_type == DATE_ISO) {
+        $date_array = array_merge($date_array, date_iso_array($date));
+      }
+      return $date_array;
+    default:
+      return NULL;
+  }
+}
+
+/**
+ * Create valid datetime value from incomplete ISO dates or arrays.
+ */
+function date_fuzzy_datetime($date) {
+  // A text ISO date, like MMMM-YY-DD HH:MM:SS
+  if (!is_array($date)) {
+    $date = date_iso_array($date);
+  }
+  // An date/time value in the format:
+  //  array('date' => MMMM-YY-DD, 'time' => HH:MM:SS).
+  elseif (array_key_exists('date', $date) || array_key_exists('time', $date)) {
+    $date_part = array_key_exists('date', $date) ? $date['date'] : '';
+    $time_part = array_key_exists('time', $date) ? $date['time'] : '';
+    $date = date_iso_array(trim($date_part . ' ' . $time_part));
+  }
+  // Otherwise date must in in format:
+  //  array('year' => YYYY, 'month' => MM, 'day' => DD).
+  if (empty($date['year'])) {
+    $date['year'] = date('Y');
+  }
+  if (empty($date['month'])) {
+    $date['month'] = 1;
+  }
+  if (empty($date['day'])) {
+    $date['day'] = 1;
+  }
+  $value = date_pad($date['year'], 4) . '-' . date_pad($date['month']) . '-' . 
+    date_pad($date['day']) . ' ' . date_pad($date['hour']) . ':' . 
+    date_pad($date['minute']) . ':' . date_pad($date['second']);
+  return $value;
+}
+
+
+/**
+ * Create an array of values from a date object. Structured like the
+ * results of getdate() but not limited to the 32-bit signed range.
+ *
+ * @param object $obj
+ * @return array
+ */
+function date_array($obj) {
+  $year = intval(date_format($obj, 'Y'));
+  $dow = date_format($obj, 'w');
+  $days = date_week_days();
+  return array(
+    'second' => (integer) date_format($obj, 's'),
+    'minute' => (integer) date_format($obj, 'i'),
+    'hour' => date_format($obj, 'G'),
+    'day' => date_format($obj, 'j'),
+    'wday' => $dow,
+    'month' => date_format($obj, 'n'),
+    'year' => date_format($obj, 'Y'),
+    'yday' => date_format($obj, 'z'),
+    'weekday' => $days[$dow],
+    'month_name' => date_format($obj, 'F'),
+    0 => date_format($obj, 'U'));
+}
+
+
+
+/**
+ *  Convert a date of any type or an array of date parts into a valid date
+ *  object.
+
+ *  @param $date
+ *    A date in any format or the string 'now' .
+ *  @param $timezone
+ *    Optional, the name of the timezone this date is in, defaults
+ *    to the user timezone, if set, otherwise the site timezone.
+ *    Accepts either a timezone name or a timezone object as input.
+ *  @param $type
+ *    The type of date provided, could be
+ *    DATE_ARRAY, DATE_UNIX, DATE_DATETIME, DATE_ISO, or DATE_OBJECT.
+ *  @param $granularity
+ *    The granularity of the date value provided. Set this for partial
+ *    dates so they pass validation and don't get reset to 'now' .
+ */
+function date_make_date($date, $timezone = NULL, $type = DATE_DATETIME, $granularity = array('year', 'month', 'day', 'hour', 'minute')) {
+  // No value or one that can't be used.
+  if (empty($date) || ($type != DATE_ARRAY && is_array($date))) {
+    return NULL;
+  }
+
+  // Make sure some value is set for the date and timezone even if the
+  // site timezone is not yet set up to avoid fatal installation
+  // errors.
+  if (empty($timezone) || !date_timezone_is_valid($timezone)) {
+    $timezone = date_default_timezone();
+  }
+    
+  // Special handling for partial dates that don't need precision.
+  $max_granularity = array_pop($granularity);
+  if (in_array($max_granularity, array('year', 'month')) || $type == DATE_ISO || $type == DATE_ARRAY) {
+    if ($type == DATE_UNIX) {
+      $date = date_convert($date, $type, DATE_DATETIME);
+    }
+    $date = date_fuzzy_datetime($date);
+    $type = DATE_DATETIME;
+  }
+  
+
+  if (!date_is_valid($date, $type, $granularity)) {
+    $date = 'now';
+  }
+  if (!empty($timezone) && !empty($date)) {
+    if ($date == 'now') {
+      return date_create('now', timezone_open($timezone));
+    }
+    elseif ($datetime = date_convert($date, $type, DATE_DATETIME, $timezone)) {
+      return date_create($datetime, timezone_open($timezone));
+    }
+  }
+  return NULL;
+}
+
+
+
+
+
+/**
+ * Extract integer value of any date part from any type of date.
+ *
+ * Example:
+ *   date_part_extract('2007-03-15 00:00', 'month', DATE_DATETIME)
+ *   returns: 3
+ *
+ * @param mixed $date
+ *   the date value to analyze.
+ * @param string $part
+ *   the part of the date to extract, 'year', 'month', 'day', 'hour', 'minute', 'second'
+ * @param string $type
+ *   the type of date supplied, DATE_ISO, DATE_UNIX, DATE_DATETIME, or DATE_OBJECT;
+ * @return integer
+ *   the integer value of the requested date part.
+ */
+function date_part_extract($date, $part, $type = DATE_DATETIME, $tz = 'UTC') {
+  $formats = array('year' => 'Y', 'month' => 'n', 'day' => 'j',
+    'hour' => 'G', 'minute' => 'i', 'second' => 's');
+  $positions = array('year' => 0, 'month' => 5, 'day' => 8,
+    'hour' => 11, 'minute' => 14, 'second' => 17);
+  $ipositions = array('year' => 0, 'month' => 4, 'day' => 6,
+    'hour' => 9, 'minute' => 11, 'second' => 13);
+  switch ($type) {
+    case DATE_ARRAY:
+      return (integer) array_key_exists($part, $date) ? $date[$part] : NULL;
+    case DATE_DATETIME:
+    case DATE_ISO:
+      return (integer) substr($date, $positions[$part], $part == 'year' ? 4 : 2);
+    case DATE_ICAL:
+      return (integer) substr($date, $ipositions[$part], $part == 'year' ? 4 : 2);
+    case DATE_UNIX:
+      // Special case when creating dates with timestamps.
+      // The date_create() function will assume date is UTC value
+      // and will ignore our timezone.
+      $date = date_create("@$date", timezone_open('UTC'));
+      date_timezone_set($date, timezone_open($tz));
+      return date_format($date, $formats[$part]);
+    case DATE_OBJECT:
+      return date_format($date, $formats[$part]);
+  }
+ }
+
+
+ /**
+  *  Functions to test the validity of a date in various formats.
+  *  Has special case for ISO dates and arrays which can be missing
+  *  month and day and still be valid.
+  *
+  *  @param $type
+  *    could be DATE_ARRAY, DATE_UNIX, DATE_DATETIME, DATE_ISO, or DATE_OBJECT
+  *  @param $granularity
+  *    The granularity of the date value provided. Set this for partial
+  *    dates so they pass validation.
+  */
+ function date_is_valid($date, $type = DATE_DATETIME, $granularity = array('year', 'month', 'day', 'hour', 'minute')) {
+
+   // Check that the value is properly structured.
+   if (empty($date)) return FALSE;
+   if ($type == DATE_OBJECT && !is_object($date)) return FALSE;
+   if (($type == DATE_ISO || $type == DATE_DATETIME) && (!is_string($date) || !preg_match(DATE_REGEX_LOOSE, $date))) return FALSE;
+   if ($type == DATE_UNIX and !is_numeric($date)) return FALSE;
+   if ($type == DATE_ARRAY and !is_array($date)) return FALSE;
+
+   // Make sure integer values are sent to checkdate.
+   $year = intval(date_part_extract($date, 'year', $type));
+   $month = intval(date_part_extract($date, 'month', $type));
+   $day = intval(date_part_extract($date, 'day', $type));
+   if (checkdate($month, $day, $year)) {
+     return TRUE;
+   }
+
+   // If this is an incomplete date (year only or year and month only), 
+   // need special handling, partial dates can have empty date parts.
+   $max_granularity = $granularity;
+   $max_granularity = array_pop($max_granularity);
+   if (!in_array($max_granularity, array('year', 'month'))) {
+     if (in_array('year', $granularity) && !date_valid_year($year)) {
+       return FALSE;
+     }
+     elseif (in_array('month', $granularity) && !date_valid_month($month)) {
+       return FALSE;
+     }
+     elseif (in_array('day', $granularity) && !date_valid_day($day, $month, $year)) {
+       return FALSE;
+     }
+   }
+   // ISO dates and arrays can have empty date parts.
+   elseif ($type == DATE_ISO || $type == DATE_ARRAY) {
+     if (!date_valid_year($year)) {
+       return FALSE;
+     }
+     elseif (!empty($month) && !date_valid_month($month)) {
+       return FALSE;
+     }
+     elseif (!empty($day) && !date_valid_day($day, $month, $year)) {
+       return FALSE;
+     }
+   }
+   elseif (!date_valid_year($year) || !date_valid_month($month) || date_valid_day($day, $month, $year)) {
+     // Unix and datetime are expected to have at least a year, month, and day.
+     return FALSE;
+   }
+
+   return TRUE;
+ }
+
+ function date_valid_year($year) {
+   if (variable_get('date_max_year', 4000) < $year || variable_get('date_min_year', 1) > $year) {
+     return FALSE;
+   }
+   else {
+     return TRUE;
+   }      
+ }
+
+ function date_valid_month($month) {
+   if (12 < $month || 0 > $month) {
+     return FALSE;
+   }
+   else {
+     return TRUE;
+   }
+ }
+
+ function date_valid_day($day, $month = NULL, $year = NULL) {
+   $days_in_month = !empty($month) && !empty($year) ? date_days_in_month($year, $month) : 31;
+   if ($days_in_month < $day || 1 > $day) {
+     return FALSE;
+   }
+   else {
+     return TRUE;
+   }
+ }
+
+
+ /**
+  *  Function to figure out if any time data is to be collected or displayed.
+  *
+  *  @param granularity
+  *    an array like ('year', 'month', 'day', 'hour', 'minute', 'second');
+  */
+ function date_has_time($granularity) {
+   if (!is_array($granularity)) $granularity = array();
+   return sizeof(array_intersect($granularity, array('hour', 'minute', 'second'))) > 0 ? TRUE : FALSE;
+ }
+
+ function date_has_date($granularity) {
+   if (!is_array($granularity)) $granularity = array();
+   return sizeof(array_intersect($granularity, array('year', 'month', 'day'))) > 0 ? TRUE : FALSE;
+ }
+ 
+ 
+ /**
+  * Recalculate a date so it only includes elements from a granularity
+  * array. Helps prevent errors when unwanted values round up and ensures
+  * that unwanted date part values don't get stored in the database.
+  *
+  * Example:
+  *   date_limit_value('2007-05-15 04:45:59', array('year', 'month', 'day'))
+  *   returns '2007-05-15 00:00:00'
+  *
+  * @param $date
+  *   a date value
+  * @param $granularity
+  *   an array of allowed date parts, like ('year', 'month', 'day', 'hour', 'minute', 'second');
+  * @param $type
+  *   the type of date value provided,
+  *   DATE_DATETIME, DATE_ISO, DATE_UNIX, or DATE_ARRAY
+  * @return
+  *   the date with the unwanted parts reset to zeros (or ones if zeros are
+  *   invalid for that date type).
+ */
+ function date_limit_value($date, $granularity, $type = DATE_DATETIME) {
+   if (!date_is_valid($date, $type, $granularity) || !$nongranularity = date_nongranularity($granularity)) {
+    return $date;
+   }
+   else {
+     $date = date_convert($date, $type, DATE_ARRAY);
+     foreach ($nongranularity as $level) {
+       switch ($level) {
+         case 'second':
+           $date['second'] = 0;
+           break;
+         case 'minute':
+           $date['minute'] = 0;
+           break;
+         case 'hour':
+           $date['hour'] = 0;
+           break;
+         case 'month':
+           $date['month'] = $type != DATE_ISO ? 1 : 0;
+           break;
+         case 'day':
+           $date['day'] = $type != DATE_ISO ? 1 : 0;
+           break;
+        }
+     }
+     return date_convert($date, DATE_ARRAY, $type);
+   }
+ }
+
+
+
+ /**
+  *  Function to figure out which db timezone applies to a date and select it
+  */
+ function date_get_timezone_db($handling, $timezone = '') {
+   switch ($handling) {
+     case ('none'):
+       $timezone = date_default_timezone();
+       break;
+     default:
+       $timezone = 'UTC';
+       break;
+   }
+   return $timezone > '' ? $timezone : 'UTC';
+ }
+
+
+ /**
+  * Embed a view using a PHP snippet.
+  *
+  * This function is meant to be called from PHP snippets, should one wish to
+  * embed a view in a node or something. It's meant to provide the simplest
+  * solution and doesn't really offer a lot of options, but breaking the function
+  * apart is pretty easy, and this provides a worthwhile guide to doing so.
+  *
+  * Note that this function does NOT display the title of the view. If you want
+  * to do that, you will need to do what this function does manually, by
+  * loading the view, getting the preview and then getting $view->get_title().
+  *
+  * @param $name
+  *   The name of the view to embed.
+  * 
+  * @param $display_id
+  *   'calendar_1' will display the calendar page, 
+  *   'calendar_block_1' will display the calendar block.
+  * 
+  * @param $settings
+  *   an array of view settings to use to override view default values;
+  * 
+  *   Include a setting for 'block_identifier, the identifier to use 
+  *   for this embedded view. All embedded views that use the same 
+  *   identifier will move together, or provide different identifiers 
+  *   to keep them independent. The identifier will be used in the url 
+  *   as a querystring, like: node/27?mini=calendar/2008-10.
+  * 
+  * @param ...
+  *   Any additional parameters will be passed as arguments.
+  */
+ function date_embed_view($name, $display_id = 'default', $settings = array(), $args = array()) {
+   $view = views_get_view($name);
+   if (!$view) {
+     return;
+   }
+   if (!empty($settings)) {
+     foreach ($settings as $key => $setting) {
+       $view->$key = $setting;
+     }
+   }
+   if (!isset($view->date_info->block_identifier)) {
+     $view->date_info->block_identifier = 'mini';
+   }
+   return $view->preview($display_id, $args);
+ }
+
+
+ /**
+  * Create an array of date parts from an ISO date.
+  */
+ function date_iso_array($date) {
+   preg_match(DATE_REGEX_LOOSE, $date, $regs);
+   return array(
+     'year' => isset($regs[1]) ? intval($regs[1]) : '',
+     'month' => isset($regs[2]) ? intval($regs[2]) : '',
+     'day' => isset($regs[3]) ? intval($regs[3]) : '',
+     'hour' => isset($regs[5]) ? intval($regs[5]) : '',
+     'minute' => isset($regs[6]) ? intval($regs[6]) : '',
+     'second' => isset($regs[7]) ? intval($regs[7]) : '',
+     );       
+ }
+ 
+ /**
+  * Helper function for getting the format string for a date type.
+  */
+ function date_type_format($type) {
+   switch ($type) {
+     case DATE_ISO:
+       return DATE_FORMAT_ISO;
+     case DATE_UNIX:
+       return DATE_FORMAT_UNIX;
+     case DATE_DATETIME:
+       return DATE_FORMAT_DATETIME;
+     case DATE_ICAL:
+       return DATE_FORMAT_ICAL;
+   }
+ }
