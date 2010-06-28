@@ -849,7 +849,7 @@ class date_sql_handler {
     }
     if (!empty($parts[0]['date'])) {
       $value = date_fuzzy_datetime($this->complete_date($parts[0]['date'], 'min'));
-      $min_date = date_make_date($value, date_default_timezone(), DATE_ISO);
+      $min_date = new DateObject($value, date_default_timezone(), DATE_ISO);
       // Build a range from a single date-only argument.
       if (empty($parts[1]) || (empty($parts[1]['date']) && empty($parts[1]['period']))) {
         $value = date_fuzzy_datetime($this->complete_date($parts[0]['date'], 'max'));

@@ -1,0 +1,139 @@
+
+/**
+ * Defines a date element of a parsed result (including ranges, repeat).
+ */
+class DateField {
+
+  // Start date and end date.
+  public $start;
+  public $end;
+
+  /**
+   * Constructor.
+   *
+   * @param $start
+   *   A FeedsDateTime object or a date as accepted by FeedsDateTime.
+   * @param $end
+   *   A FeedsDateTime object or a date as accepted by FeedsDateTime.
+   * @param $tz
+   *   A PHP DateTimeZone object.
+   */
+  public function __construct($start = NULL, $end = NULL, $tz = NULL) {
+    $this->start = (!isset($start) || ($start instanceof FeedsDateTime)) ? $start : new FeedsDateTime($start, $tz);
+    $this->end = (!isset($end) || ($end instanceof FeedsDateTime)) ? $end : new FeedsDateTime($end, $tz);
+  }
+
+  /**
+   * Implementation of toString magic php method.
+   */
+  public function __toString() {
+    if ($this->start) {
+      return $this->start->format('U');
+    }
+    return '';
+  }
+
+  /**
+   * Merge this field with another. Most stuff goes down when merging the two
+   * sub-dates.
+   *
+   * @see FeedsDateTime
+   */
+  public function merge(DateField $other) {
+    $this2 = clone $this;
+    if ($this->start && $other->start) {
+      $this2->start = $this->start->merge($other->start);
+    }
+    elseif ($other->start) {
+      $this2->start = clone $other->start;
+    }
+    elseif ($this->start) {
+      $this2->start = clone $this->start;
+    }
+
+    if ($this->end && $other->end) {
+      $this2->end = $this->end->merge($other->end);
+    }
+    elseif ($other->end) {
+      $this2->end = clone $other->end;
+    }
+    elseif ($this->end) {
+      $this2->end = clone $this->end;
+    }
+    return $this2;
+  }
+
+  /**
+   * Helper method for buildDateField(). Build a FeedsDateTimeElement object
+   * from a standard formatted node.
+   */
+  protected static function readDateField($node, $field_name) {
+    $field = content_fields($field_name);
+    $ret = new DateField();
+    if (isset($node->{$field_name}[0]['date']) && $node->{$field_name}[0]['date'] instanceof DateObject) {
+      $ret->start = $node->{$field_name}[0]['date'];
+    }
+    if (isset($node->{$field_name}[0]['date2']) && $node->{$field_name}[0]['date2'] instanceof DateObject) {
+      $ret->end = $node->{$field_name}[0]['date2'];
+    }
+    return $ret;
+  }
+
+  /**
+   * Build a node's date CCK field from our object.
+   *
+   * @param $node
+   *   The node to build the date field on.
+   * @param $field_name
+   *   The name of the field to build.
+   */
+  public function buildDateField($node, $field_name) {
+    $field = content_fields($field_name);
+    $oldfield = DateField::readDateField($node, $field_name);
+    // Merge with any preexisting objects on the field; we take precedence.
+    $oldfield = $this->merge($oldfield);
+    $use_start = $oldfield->start;
+    $use_end = $oldfield->end;
+
+    // Set timezone if not already in the FeedsDateTime object
+    $to_tz = date_get_timezone($field['tz_handling'], date_default_timezone_name());
+    $temp = new DateObject(NULL, new DateTimeZone($to_tz));
+
+    if ($use_start) {
+      $use_start = $use_start->merge($temp);
+      if (!date_timezone_is_valid($use_start->getTimezone()->getName())) {
+        $use_start->setTimezone(new DateTimeZone("UTC"));
+      }
+    }
+    if ($use_end) {
+      $use_end = $use_end->merge($temp);
+      if (!date_timezone_is_valid($use_end->getTimezone()->getName())) {
+        $use_end->setTimezone(new DateTimeZone("UTC"));
+      }
+    }
+    $db_tz = new DateTimeZone("UTC");
+    if (!isset($node->{$field_name})) {
+      $node->{$field_name} = array();
+    }
+    if ($use_start) {
+      $node->{$field_name}[0]['timezone'] = $use_start->getTimezone()->getName();
+      $node->{$field_name}[0]['offset'] = $use_start->getOffset();
+      $use_start->setTimezone($db_tz);
+      $node->{$field_name}[0]['date'] = $use_start;
+      /**
+       * @todo the date_type_format line could be simplified based upon a patch
+       *   DO issue #259308 could affect this, follow up on at some point.
+       *   Without this, all granularity info is lost.
+       *   $use_start->format(date_type_format($field['type'], $use_start->granularity));
+       */
+      $node->{$field_name}[0]['value'] = $use_start->format(date_type_format($field['type']));
+    }
+    if ($use_end) {
+      // Don't ever use end to set timezone (for now)
+      $node->{$field_name}[0]['offset2'] = $use_end->getOffset();
+      $use_end->setTimezone($db_tz);
+      $node->{$field_name}[0]['date2'] = $use_end;
+      $node->{$field_name}[0]['value2'] = $use_end->format(date_type_format($field['type']));
+    }
+  }
+}
