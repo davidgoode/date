@@ -95,6 +95,31 @@ class DateObject extends DateTime {
       $time = "@". $time;
     }
     
+    if (is_array($time)) {
+      // Assume we were passed an indexed array
+      $datetime = '';
+      if ($time['year'] !== '') {
+        $datetime = date_pad(intval($time['year']), 4);
+        if ($time['month'] !== '') {
+          $datetime .= '-'. date_pad(intval($time['month']));
+          if ($time['day'] !== '') { 
+            $datetime .= '-'. date_pad(intval($time['day']));
+          }
+        }
+      }
+      if ($time['hour'] !== '') {
+        $datetime .= $datetime ? 'T' : '';
+        $datetime .= date_pad(intval($time['hour']));
+        if ($time['minute'] !== '') {
+          $datetime.= ':'. date_pad(intval($time['minute']));
+          if ($time['second'] !== '') {
+            $datetime .= ':'. date_pad(intval($time['second']));
+          }
+        }
+      }
+      $time = $datetime;
+      $format = DATE_ISO;
+    }
     // Allow string timezones
     if (!empty($tz) && !is_object($tz)) {
       $tz = new DateTimeZone($tz);
@@ -204,7 +229,22 @@ class DateObject extends DateTime {
    * Checks granularity array for a given entry.
    * Accepts an array, in which case all items must be present (AND's the query)
    */
-  public function hasGranularity($g) {
+  public function hasGranularity($g = NULL) {
+    if ($g === NULL) {
+      //just want to know if it has something valid
+      //means no lower granularities without higher ones
+      $last = TRUE;
+      foreach(self::$allgranularity AS $ag) {
+        if($ag == 'timezone') {
+          continue;
+        }
+        if(in_array($ag, $this->granularity) && !$last) {
+          return FALSE;
+        }
+        $last = in_array($ag, $this->granularity);
+      }
+      return in_array('year', $this->granularity);
+    }
     if (is_array($g)) {
       foreach($g as $gran) {
         if (!in_array($gran, $this->granularity)) {
@@ -214,6 +254,10 @@ class DateObject extends DateTime {
       return TRUE;
     }
     return in_array($g, $this->granularity);
+  }
+  
+  public function valid() {
+    return $this->hasGranularity();
   }
 
   /**

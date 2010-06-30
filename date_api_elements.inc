@@ -502,11 +502,11 @@ function date_select_validate($element, &$form_state) {
  */
 function date_select_input_value($element) {
   $granularity = date_format_order($element['#date_format']);
-  if (date_is_valid($element['#value'], DATE_ARRAY, $granularity)) {
-    // Use fuzzy_datetime here to be sure year-only dates
-    // aren't inadvertantly shifted to the wrong year by trying
-    // to save '2009-00-00 00:00:00' .
-    return date_fuzzy_datetime(date_convert($element['#value'], DATE_ARRAY, DATE_DATETIME));
+  $value = new DateObject($element['#value']);
+  $value->limitGranularity($granularity);
+
+  if ($value->valid() && ($element['#date_flexible'] || $value->hasGranularity($granularity))) {
+    return $value->format(DATE_FORMAT_ISO);
   }
   return NULL;
 }
@@ -550,7 +550,7 @@ function date_text_input_value($element) {
   $value = new DateObject($input, NULL, $element['#date_format']);
   $value->limitGranularity($granularity);
 
-  if (($element['#date_flexible'] && $value->hasGranularity('year')) || $value->hasGranularity($granularity)) {
+  if ($value->valid() && ($element['#date_flexible'] || $value->hasGranularity($granularity))) {
     return $value->format(DATE_FORMAT_ISO);
   }
   return NULL;
