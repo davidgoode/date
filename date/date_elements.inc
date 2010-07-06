@@ -225,7 +225,7 @@ function date_local_date($form, $form_state, $delta, $item, $timezone, $field, $
     if (empty($date)) {
       return NULL;
     }
-    date_timezone_set($date, timezone_open($timezone));
+    $date->setTimezone(timezone_open($timezone));
   }
   if (is_object($date) && empty($item[$part]) && $default_value == 'strtotime' && !empty($default_value_code)) {
     date_modify($date, $default_value_code);
@@ -506,18 +506,23 @@ function date_combo_validate($element, &$form_state) {
       $timezone_db = date_get_timezone_db($field['settings']['tz_handling']);
       $item[$tz_field] = $timezone;
 
-      $from_date = date_make_date($from_date, $timezone);
+      $from_date = new DateObject($from_date, $timezone);
       $item[$offset_field] = date_offset_get($from_date);
       
-      $to_date = date_make_date($to_date, $timezone);
-      $test_from = date_format($from_date, 'r');
-      $test_to = date_format($to_date, 'r');
+      $to_date = new DateObject($to_date, $timezone);
+      $test_from = $from_date->format('r');
+      $test_to = $to_date->format('r');
+      
+      // New stuff for dynamic granularity.
+      if ($from_date->granularity != $to_date->granularity) {
+        $errors[] = t('The From date and the To date must have the same granularity');
+      }
       
       $item[$offset_field2] = date_offset_get($to_date);
-      date_timezone_set($from_date, timezone_open($timezone_db));
-      date_timezone_set($to_date, timezone_open($timezone_db));
-      $item[$from_field] = date_format($from_date, date_type_format($field['type']));
-      $item[$to_field] = date_format($to_date, date_type_format($field['type']));
+      $from_date->setTimezone(timezone_open($timezone_db), TRUE);
+      $to_date->setTimezone(timezone_open($timezone_db), TRUE);
+      $item[$from_field] = $from_date->format(date_type_format($field['type']));
+      $item[$to_field] = $to_date->format(date_type_format($field['type']));
       if (isset($form_values[$field_name]['rrule'])) {
         $item['rrule'] = $form_values[$field['field_name']]['rrule'];
       }
@@ -525,12 +530,12 @@ function date_combo_validate($element, &$form_state) {
       // Test a roundtrip back to the original timezone to catch
       // invalid dates, like 2AM on the day that spring daylight savings
       // time begins in the US.
-      date_timezone_set($from_date, timezone_open($timezone));
-      date_timezone_set($to_date, timezone_open($timezone));
-      if ($test_from != date_format($from_date, 'r')) {
+      $from_date->setTimezone(timezone_open($timezone), TRUE);
+      $to_date->setTimezone(timezone_open($timezone), TRUE);
+      if ($test_from != $from_date->format('r')) {
         $errors[] = t('The From date is invalid.');
       }
-      if ($test_to != date_format($to_date, 'r')) {
+      if ($test_to != $to_date->format('r')) {
         $errors[] = t('The To date is invalid.');
       }
       if (empty($errors)) {

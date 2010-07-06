@@ -513,12 +513,13 @@ function date_formatter_process($formatter, $entity_type, $entity, $field, $inst
       $value = $item[$processed];
       
       $date = new DateObject($value, $timezone_db);
-      $date->limit_granularity($field['settings']['granularity']);
+      //limit to field granularity settings at most
+      $date->limitGranularity($field['settings']['granularity']);
       $dates[$processed] = array();
       $dates[$processed]['db']['object'] = $date;
       $dates[$processed]['db']['datetime'] = $date->format(DATE_FORMAT_DATETIME, true);
 
-      $date->set_timezone(timezone_open($timezone));
+      $date->setTimezone(timezone_open($timezone));
       $dates[$processed]['local']['object'] = $date;
       $dates[$processed]['local']['datetime'] = $date->format(DATE_FORMAT_DATETIME, true);
       $dates[$processed]['local']['timezone'] = $timezone;

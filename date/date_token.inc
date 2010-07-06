@@ -40,9 +40,9 @@ function date_token_values($type, $object = NULL) {
     $item_type = isset($item['date_type']) ? $item['date_type'] : (is_numeric($item['value']) ? DATE_UNIX : DATE_ISO);
     $timezone = !empty($item['timezone']) ? $item['timezone'] : date_default_timezone();
     $timezone_db = !empty($item['timezone_db']) ? $item['timezone_db'] : 'UTC';
-    $date = date_make_date($item['value'], $timezone_db, $item_type);
+    $date = new DateObject($item['value'], $timezone_db);
     if (!empty($date) && $timezone_db != $timezone) {
-      date_timezone_set($date, timezone_open($timezone));
+      $date->setTimezone(timezone_open($timezone));
     }
         
     $tokens['value']          = $item['value'];
@@ -66,9 +66,9 @@ function date_token_values($type, $object = NULL) {
     if (!empty($item['value2'])) {
 
       $item['value2'] = trim($item['value2']);
-      $date = date_make_date($item['value2'], $timezone_db, $item_type);
+      $date = new DateObject($item['value2'], $timezone_db);
       if ($timezone_db != $timezone) {
-        date_timezone_set($date, timezone_open($timezone));
+        $date->setTimezone(timezone_open($timezone));
       }
 
       $tokens['to-value']          = $item['value2'];

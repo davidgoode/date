@@ -220,16 +220,15 @@ function theme_date_all_day($vars) {
 
   // Date doesn't have time granularity but could, so it can be called "all day"
   if (date_has_time($field['settings']['granularity']) && !$$which->hasTime()) {
-    $format = date_limit_format($format, array('year', 'month', 'day'));
-    return trim($$which->format($format) . ' ' . theme('date_all_day_label'));
+    return trim(date_format_date($$which, 'custom', $format) . ' ' . theme('date_all_day_label'));
   }
   // There is no time, use neither 'All day' nor time.
   elseif (!date_has_time($field['settings']['granularity'])) {
-    return $$which->format($format);
+    return date_format_date($$which, 'custom', $format);
   }
   // Normal formatting.
   else {
-    return $$which->format($format);
+    return date_format_date($$which, 'custom', $format);
   }
 }
 

@@ -89,7 +89,7 @@ class DateObject extends DateTime {
    *   and the default constructor method will hopefully parse it.
    *   $format is recommended in order to use negative or large years, which php's parser fails on.
    */
-  public function __construct($time = '', $tz = NULL, $format = NULL) {
+  public function __construct($time = 'now', $tz = NULL, $format = NULL) {
     if (is_numeric($time)) {
       // Assume timestamp.
       $time = "@". $time;
@@ -157,7 +157,7 @@ class DateObject extends DateTime {
     $this2 = clone $this;
     $this2->setTimezone($use_tz);
     $other->setTimezone($use_tz);
-    $val = $this2->toArray();
+    $val = $this2->toArray(TRUE);
     $otherval = $other->toArray();
     foreach (self::$allgranularity as $g) {
       if ($other->hasGranularity($g) && !$this2->hasGranularity($g)) {
@@ -191,7 +191,7 @@ class DateObject extends DateTime {
     if (!$this->hasTime() || !$this->hasGranularity('timezone') || $force) {
       // this has no time or timezone granularity, so timezone doesn't mean much
       // We set the timezone using the method, which will change the day/hour, but then we switch back
-      $arr = $this->toArray();
+      $arr = $this->toArray(TRUE);
       parent::setTimezone($tz);
       $this->setDate($arr['year'], $arr['month'], $arr['day']);
       $this->setTime($arr['hour'], $arr['minute'], $arr['second']);
@@ -284,11 +284,16 @@ class DateObject extends DateTime {
   protected function setGranularityFromTime($time, $tz) {
     $this->granularity = array();
     $temp = date_parse($time);
-    // This PHP method currently doesn't have resolution down to seconds, so if
-    // there is some time, all will be set.
-    foreach (self::$allgranularity AS $g) {
-      if ((isset($temp[$g]) && is_numeric($temp[$g])) || ($g == 'timezone' && (isset($temp['zone_type']) && $temp['zone_type'] > 0))) {
-        $this->granularity[] = $g;
+    // Special case for "now"
+    if ($time == 'now') {
+      $this->granularity = array('year', 'month', 'day', 'hour', 'minute', 'second');
+    } else {
+      // This PHP date_parse() method currently doesn't have resolution down to seconds, so if
+      // there is some time, all will be set.
+      foreach (self::$allgranularity AS $g) {
+        if ((isset($temp[$g]) && is_numeric($temp[$g])) || ($g == 'timezone' && (isset($temp['zone_type']) && $temp['zone_type'] > 0))) {
+          $this->granularity[] = $g;
+        }
       }
     }
     if ($tz) {
@@ -390,6 +395,9 @@ class DateObject extends DateTime {
     foreach (self::$allgranularity AS $g) {
       if (isset($final_date[$g]) && is_numeric($final_date[$g])) {
         $this->granularity[] = $g;
+      } else {
+        //avoid errors on setDate and setTime now that we know our granularity
+        $final_date[$g] = 0;
       }
     }
     if ($tz) {
@@ -405,8 +413,8 @@ class DateObject extends DateTime {
    * Helper to return all standard date parts in an array.
    * Will return '' for parts in which it lacks granularity.
    */
-  protected function toArray() {
-    return array('year' => $this->format('Y'), 'month' => $this->format('m'), 'day' => $this->format('d'), 'hour' => $this->format('H'), 'minute' => $this->format('i'), 'second' => $this->format('s'), 'timezone' => $this->format('e'));
+  protected function toArray($force = FALSE) {
+    return array('year' => $this->format('Y', $force), 'month' => $this->format('m', $force), 'day' => $this->format('d', $force), 'hour' => $this->format('H', $force), 'minute' => $this->format('i', $force), 'second' => $this->format('s', $force), 'timezone' => $this->format('e', $force));
   }
   
   /**
@@ -960,6 +968,7 @@ function date_t_strings(&$replace, $langcode) {
  * post-2038 dates and accept a date object instead of a timestamp as input.
  *
  * Translates formatted date results, unlike PHP function date_format().
+ * Should only be used for display, not input, because it can't be parsed.
  *
  * @param $oject
  *   A date object.
@@ -993,6 +1002,7 @@ function date_format_date($date, $type = 'medium', $format = '', $langcode = NUL
     default:
       $format = variable_get('date_format_medium', 'D, m/d/Y - H:i');
   }
+  $format = date_limit_format($format, $date->granularity);
   $max = strlen($format);
   $datestring = '';
   for ($i = 0; $i < $max; $i++) {
@@ -1129,7 +1139,7 @@ function date_default_timezone_object($check_user = TRUE) {
 function date_days_in_month($year, $month) {
   // Pick a day in the middle of the month to avoid timezone shifts.
   $datetime = date_pad($year, 4) . '-' . date_pad($month) . '-15 00:00:00';
-  $date = date_make_date($datetime);
+  $date = new DateObject($datetime);
   return date_format($date, 't');
 }
 
@@ -1224,8 +1234,8 @@ function date_day_of_week_name($date = NULL, $abbr = TRUE, $type = DATE_DATETIME
  * chosen first day of week for this site.
  */
 function date_week_range($week, $year) {
-  $min_date = date_make_date($year . '-01-01 00:00:00', date_default_timezone());
-  date_timezone_set($min_date, date_default_timezone());
+  $min_date = new DateObject($year . '-01-01 00:00:00', date_default_timezone());
+  $min_date->setTimezone(date_default_timezone());
 
   // move to the right week
   date_modify($min_date, '+' . strval(7 * ($week - 1)) . ' days');
@@ -1240,7 +1250,7 @@ function date_week_range($week, $year) {
   date_modify($max_date, '+7 days');
 
   if (date_format($min_date, 'Y') != $year) {
-    $min_date = date_make_date($year . '-01-01 00:00:00', date_default_timezone());
+    $min_date = new DateObject($year . '-01-01 00:00:00', date_default_timezone());
   }
   return array($min_date, $max_date);
 }
@@ -1254,7 +1264,7 @@ function date_week_range($week, $year) {
  * @return int number of calendar weeks in selected year.
  */
 function date_weeks_in_year($year) {
-  $date = date_make_date(($year + 1) . '-01-01 12:00:00', 'UTC');
+  $date = new DateObject(($year + 1) . '-01-01 12:00:00', 'UTC');
   date_modify($date, '-1 day');
   return date_week(date_format($date, 'Y-m-d'));
 }
@@ -1271,8 +1281,8 @@ function date_week($date) {
   $date = substr($date, 0, 10);
   $parts = explode('-', $date);
 
-  $date = date_make_date($date . ' 12:00:00', 'UTC');
-  $year_date = date_make_date($parts[0] . '-01-01 12:00:00', 'UTC');
+  $date = new DateObject($date . ' 12:00:00', 'UTC');
+  $year_date = new DateObject($parts[0] . '-01-01 12:00:00', 'UTC');
 
   $week = intval(date_format($date, 'W'));
   $year_week = intval(date_format($year_date, 'W'));

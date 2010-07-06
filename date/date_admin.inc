@@ -302,7 +302,7 @@ function _date_field_settings_form($field, $instance, $has_data) {
       '#type' => 'checkbox',
       '#title' => t('Flexible Granularity'),
       '#default_value' => $settings['granularity_flexible'],
-      '#description' => t('Allow entry of granularity from year only up to the maximum setting for this field. Only works with certain widgets.'),
+      '#description' => t('Allow entry of granularity from year only up to the maximum setting for this field.'),
       );
   } else {
     $form['granularity_flexible'] = array('#type' => 'hidden', '#value' => 0);
@@ -370,10 +370,10 @@ function date_timezone_handling_options() {
  */
 function date_example_date() {
   $now = date_now();
-  if (date_format($now, 'm') == date_format($now, 'd')) {
+  if ($now->format('m') == $now->format('d')) {
     date_modify($now, '+1 day');
   }
-  if (date_format($now, 'H') == date_format($now, 'h')) {
+  if ($now->format('H') == $now->format('h')) {
     date_modify($now, '+12 hours');
   }
   return $now;
