@@ -443,7 +443,7 @@ class date_sql_handler {
       // conversion by altering the comparison date to the db timezone.
       // This won't work if the timezone is a field instead of a value.
       if (empty($this->db_timezone_field) && empty($this->local_timezone_field) && $this->db_timezone_field != $this->local_timezone_field) {
-        $date->setTimezone(timezone_open($this->db_timezone);
+        $date->setTimezone(timezone_open($this->db_timezone));
         $this->local_timezone = $this->db_timezone;
       }
       $value = "'" . $date->format(DATE_FORMAT_DATETIME, true) . "'";
@@ -652,43 +652,6 @@ class date_sql_handler {
         if ($value < 0 || $value > 53) return FALSE;
     }
     return TRUE;
-  }
-
-  function views_formats($granularity, $type = 'sql') {
-    $formats = array('display', 'sql');
-    // Start with the site long date format and add seconds to it
-    $long = str_replace(':i', ':i:s', variable_get('date_format_long',  'l, F j, Y - H:i'));
-    switch ($granularity) {
-      case ('year'):
-        $formats['display'] = 'Y';
-        $formats['sql'] = 'Y';
-        break;
-      case ('month'):
-        $formats['display'] = date_limit_format($long, array('year', 'month'));
-        $formats['sql'] = 'Y-m';
-        break;
-      case ('day'):
-        $formats['display'] = date_limit_format($long, array('year', 'month', 'day'));
-        $formats['sql'] = 'Y-m-d';
-        break;
-      case ('hour'):
-        $formats['display'] = date_limit_format($long, array('year', 'month', 'day', 'hour'));
-        $formats['sql'] = 'Y-m-d\TH';
-        break;
-      case ('minute'):
-        $formats['display'] = date_limit_format($long, array('year', 'month', 'day', 'hour', 'minute'));
-        $formats['sql'] = 'Y-m-d\TH:i';
-        break;
-      case ('second'):
-        $formats['display'] = date_limit_format($long, array('year', 'month', 'day', 'hour', 'minute', 'second'));
-        $formats['sql'] = 'Y-m-d\TH:i:s';
-        break;
-      case ('week'):
-        $formats['display'] = 'F j Y (W)';
-        $formats['sql'] = 'Y-\WW';
-        break;
-    }
-    return $formats[$type];
   }
   
   function granularity_form($granularity) {

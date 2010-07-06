@@ -144,6 +144,7 @@ function date_field_info() {
       'todate' => '',
       'repeat' => 0,
       'granularity' => drupal_map_assoc(array('year', 'month', 'day', 'hour', 'minute')),
+      'granularity_flexible' => 0,
       'tz_handling' => 'site',
       'timezone_db' => 'UTC',
     ),

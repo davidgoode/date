@@ -142,7 +142,7 @@ function _date_field_widget_form(&$form, &$form_state, $field, $instance, $langc
       $items[$delta][$processed] = '';
     }
     $date = date_local_date($form, $form_state, $delta, $items[$delta], $timezone, $field, $instance, $processed);
-    $items[$delta][$processed] = is_object($date) ? $date->format(DATE_FORMAT_DATETIME, $items[$delta]['date_type'] == DATE_ISO) : '';
+    $items[$delta][$processed] = is_object($date) ? $date->format(DATE_FORMAT_DATETIME, !$field['settings']['granularity_flexible']) : '';
   }
   
   $element += array(
@@ -151,6 +151,7 @@ function _date_field_widget_form(&$form, &$form_state, $field, $instance, $langc
     '#weight' => $delta,
     '#default_value' => isset($items[$delta]) ? $items[$delta] : '',
     '#date_timezone' => $timezone,
+    '#date_flexible' => $field['settings']['granularity_flexible'],
     '#element_validate' => array('date_combo_validate', 'date_widget_validate'),
   );
 
@@ -202,30 +203,25 @@ function date_local_date($form, $form_state, $delta, $item, $timezone, $field, $
         return NULL;
       }
       else {
-        $date = date_make_date($item['value'], $timezone, DATE_DATETIME, $field['settings']['granularity']);
+        $date = new DateObject($item['value'], $timezone);
+        $date->limitGranularity($field['settings']['granularity']);
       }
     }
     // Special case for 'now' when using dates with no timezone,
     // make sure 'now' isn't adjusted to UTC value of 'now' .
     elseif ($field['settings']['tz_handling'] == 'none') {
-      $date = date_now();
+      $date = new DateObject('now');
     }
     else {
-      $date = date_now($timezone);
+      $date = new DateObject('now', $timezone);
     }
   }
   else {
     $value = $item[$part];
-     
-    // Special case for ISO dates to create a valid date object for formatting.
-    if ($field['type'] == DATE_ISO) {
-      $value = date_fuzzy_datetime($value);
-    }
-    else {
-      $db_timezone = date_get_timezone_db($field['settings']['tz_handling']);
-      $value = date_convert($value, $field['type'], DATE_DATETIME, $db_timezone);
-    }
-    $date = date_make_date($value, date_get_timezone_db($field['settings']['tz_handling']), DATE_DATETIME, $field['settings']['granularity']);
+
+    $date = new DateObject($value, date_get_timezone_db($field['settings']['tz_handling']));
+    $date->limitGranularity($field['settings']['granularity']);
+
     if (empty($date)) {
       return NULL;
     }
@@ -296,6 +292,7 @@ function date_combo_element_process($element, &$form_state, $form) {
     '#field'         => $field,
     '#delta'         => $delta,
     '#date_timezone' => $element['#date_timezone'],
+    '#date_flexible' => $field['settings']['granularity_flexible'],
     '#date_format'      => date_limit_format(date_input_format($element, $field, $instance), $field['settings']['granularity']),
     '#date_text_parts'  => (array) $instance['widget']['settings']['text_parts'],
     '#date_increment'   => $instance['widget']['settings']['increment'],

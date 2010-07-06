@@ -295,6 +295,18 @@ function _date_field_settings_form($field, $instance, $has_data) {
     '#description' => $description,
     '#disabled' => $has_data,
     );
+  if ($field['type'] == 'date' && !$settings['repeat']) {
+    //@TODO figure out how to make flexible granularity work with repeating dates
+    //IE all day events can sensibly repeat every month
+    $form['granularity_flexible'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Flexible Granularity'),
+      '#default_value' => $settings['granularity_flexible'],
+      '#description' => t('Allow entry of granularity from year only up to the maximum setting for this field. Only works with certain widgets.'),
+      );
+  } else {
+    $form['granularity_flexible'] = array('#type' => 'hidden', '#value' => 0);
+  }
   $description = t('Select the timezone handling method to be used for this date field.');
   $form['tz_handling'] = array(
     '#type' => 'select',

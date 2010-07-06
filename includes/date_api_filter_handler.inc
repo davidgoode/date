@@ -462,9 +462,8 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     $granularity = $this->options['granularity'];
     $date_handler = $query_field['date_handler'];
     $this->format = $date_handler->views_formats($granularity, 'sql');
-    $complete_date = date_fuzzy_datetime($this->value[$prefix]);
-    $date = date_make_date($complete_date);
-    $value = date_format($date, $this->format);
+    $date = new DateObject($this->value[$prefix]);
+    $value = $date->format($this->format);
     
     $range = $this->date_handler->arg_range($value);
     $year_range = date_range_years($this->options['year_range']);
@@ -472,14 +471,14 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       switch ($operator) {
         case '>':
         case '>=':
-          $range[1] = date_make_date(date_pad($year_range[1], 4) . '-12-31 23:59:59');  
+          $range[1] = new DateObject(date_pad($year_range[1], 4) . '-12-31 23:59:59');  
           if ($operator == '>') {
             date_modify($range[0], '+1 second');
           }
           break;
         case '<':
         case '<=':
-          $range[0] = date_make_date(date_pad($year_range[0], 4) . '-01-01 00:00:00');
+          $range[0] = new DateObject(date_pad($year_range[0], 4) . '-01-01 00:00:00');
           if ($operator == '<') {
             date_modify($range[1], '-1 second');
           }
@@ -507,9 +506,6 @@ class date_api_filter_handler extends views_handler_filter_numeric {
         break;
       case 'max':
         $value = date_format($max_date, $this->format);
-        break;
-      default:
-        $value = date_format($date, $this->format);
         break;
     }
     if ($this->date_handler->granularity != 'week') {
