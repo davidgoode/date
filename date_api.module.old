@@ -536,19 +536,3 @@ function date_part_extract($date, $part, $type = DATE_DATETIME, $tz = 'UTC') {
      'second' => isset($regs[7]) ? intval($regs[7]) : '',
      );       
  }
- 
- /**
-  * Helper function for getting the format string for a date type.
-  */
- function date_type_format($type) {
-   switch ($type) {
-     case DATE_ISO:
-       return DATE_FORMAT_ISO;
-     case DATE_UNIX:
-       return DATE_FORMAT_UNIX;
-     case DATE_DATETIME:
-       return DATE_FORMAT_DATETIME;
-     case DATE_ICAL:
-       return DATE_FORMAT_ICAL;
-   }
- }

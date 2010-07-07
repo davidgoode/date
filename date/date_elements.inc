@@ -13,16 +13,18 @@
  */
 function _date_field_validate($entity_type, $entity, $field, $instance, $langcode, &$items) {
   $field_name = $field['field_name'];
- 
+
   // Don't try to validate if there were any errors before this point
   // since the element won't have been munged back into a date.
+  // The values will already be either sufficient, valid properly-formatted for DB insertion
+  // dates or nothing, no extra validation needed.
   if (!form_get_errors()) {
     foreach ($items as $delta => $item) {
       $process = date_process_values($field, $instance);
       foreach ($process as $processed) {
         if ($processed == 'value' && $field['settings']['todate']
-          && !date_is_valid($item['value'], $field['type'], $field['settings']['granularity'])
-          && (date_is_valid($item['value2'], $field['type'], $field['settings']['granularity']))) {
+          && !$item['value']
+          && $item['value2']) {
           $errors[$field['field_name']][$langcode][$delta][] = array(
               'error' => 'valid_nid',
               'message' => t("A 'From date' date is required for field %field %delta.", array('%delta' => $field['cardinality'] ? intval($delta + 1) : '', '%field' => t($instance['widget']['label']))),
@@ -30,8 +32,8 @@ function _date_field_validate($entity_type, $entity, $field, $instance, $langcod
         }
         if ($processed == 'value2'
           && $field['settings']['todate'] == 'required' && ($field['required']
-          && date_is_valid($item['value'], $field['type'], $field['settings']['granularity'])
-          && !date_is_valid($item['value2'], $field['type'], $field['settings']['granularity']))) {
+          && $item['value']
+          && !$item['value2'])) {
           $errors[$field['field_name']][$langcode][$delta][] = array(
             'error' => 'valid_nid',
             'message' => t("A 'To date' is required for field %field %delta.", array('%delta' => $field['cardinality'] ? intval($delta + 1) : '', '%field' => t($instance['label']))),
@@ -58,19 +60,6 @@ function _date_field_update($entity_type, $entity, $field, $instance, $langcode,
     $items[$delta]['timezone'] = date_get_timezone($field['settings']['tz_handling'], $timezone);
     $items[$delta]['timezone_db'] = date_get_timezone_db($field['settings']['tz_handling']);
     $items[$delta]['date_type'] = $field['type'];
-  }  
-  $entity->$field['field_name'][$langcode] = $items;
-
-  foreach ($values as $delta => $item) {
-
-    // Special case for ISO dates which may have been given artificial values for
-    // some date parts to make them into valid dates.
-    if (!empty($item['value']) && $field['type'] == DATE_ISO) {
-      $items[$delta]['value'] = date_limit_value($items[$delta]['value'], date_granularity($field), $field['type']);
-      if ($field['settings']['todate']) {
-        $items[$delta]['value2'] = date_limit_value($items[$delta]['value2'], date_granularity($field), $field['type']);
-      }
-    }
   }
   $entity->$field['field_name'][$langcode] = $items;
 }
@@ -127,7 +116,7 @@ function _date_field_widget_form(&$form, &$form_state, $field, $instance, $langc
     $timezone = $timezone['timezone'];
   }
   
-  // Convert UTC dates to their local values in DATETIME format,
+  // Convert UTC dates to their local values in ISO format,
   // and adjust the default values as specified in the field settings.
 
   // It would seem to make sense to do this conversion when the data
@@ -142,7 +131,7 @@ function _date_field_widget_form(&$form, &$form_state, $field, $instance, $langc
       $items[$delta][$processed] = '';
     }
     $date = date_local_date($form, $form_state, $delta, $items[$delta], $timezone, $field, $instance, $processed);
-    $items[$delta][$processed] = is_object($date) ? $date->format(DATE_FORMAT_DATETIME, !$field['settings']['granularity_flexible']) : '';
+    $items[$delta][$processed] = is_object($date) ? $date->format(DATE_FORMAT_ISO) : '';
   }
   
   $element += array(
@@ -203,7 +192,7 @@ function date_local_date($form, $form_state, $delta, $item, $timezone, $field, $
         return NULL;
       }
       else {
-        $date = new DateObject($item['value'], $timezone);
+        $date = new DateObject($item['value'], new DateTimeZone($timezone));
         $date->limitGranularity($field['settings']['granularity']);
       }
     }
@@ -219,7 +208,7 @@ function date_local_date($form, $form_state, $delta, $item, $timezone, $field, $
   else {
     $value = $item[$part];
 
-    $date = new DateObject($value, date_get_timezone_db($field['settings']['tz_handling']));
+    $date = new DateObject($value, new DateTimeZone(date_get_timezone_db($field['settings']['tz_handling'])));
     $date->limitGranularity($field['settings']['granularity']);
 
     if (empty($date)) {
@@ -480,7 +469,7 @@ function date_combo_validate($element, &$form_state) {
     else {
       $item[$to_field] = $item[$from_field];
     }
-    
+
     $from_date = date_input_value($field, $instance, $element[$from_field]);
     if (!empty($field['settings']['todate'])) {
       $to_date = date_input_value($field, $instance, $element[$to_field]);
@@ -500,38 +489,42 @@ function date_combo_validate($element, &$form_state) {
       $errors[] = t('The To date must be greater than the From date.');
     }
     else {
-      // Convert input dates back to their UTC values and re-format to ISO
-      // or UNIX instead of the DATETIME format used in element processing.
+      // Convert input dates back to their UTC values and re-format to DATETIME
+      // or UNIX instead of the ISO format used in element processing.
       $timezone = !empty($item[$tz_field]) ? $item[$tz_field] : $element['#date_timezone'];
-      $timezone_db = date_get_timezone_db($field['settings']['tz_handling']);
+      $timezone_db = new DateTimeZone(date_get_timezone_db($field['settings']['tz_handling']));
       $item[$tz_field] = $timezone;
-
-      $from_date = new DateObject($from_date, $timezone);
+      $timezone = new DateTimeZone($timezone);
+      
+      $from_date->setTimezone($timezone);
       $item[$offset_field] = date_offset_get($from_date);
       
-      $to_date = new DateObject($to_date, $timezone);
+      $to_date->setTimezone($timezone);
       $test_from = $from_date->format('r');
       $test_to = $to_date->format('r');
       
       // New stuff for dynamic granularity.
-      if ($from_date->granularity != $to_date->granularity) {
+      if ($from_date->granularity != $to_date->granularity){
         $errors[] = t('The From date and the To date must have the same granularity');
       }
-      
       $item[$offset_field2] = date_offset_get($to_date);
-      $from_date->setTimezone(timezone_open($timezone_db), TRUE);
-      $to_date->setTimezone(timezone_open($timezone_db), TRUE);
-      $item[$from_field] = $from_date->format(date_type_format($field['type']));
-      $item[$to_field] = $to_date->format(date_type_format($field['type']));
+      $from_date->setTimezone($timezone_db);
+      $to_date->setTimezone($timezone_db);
+      
+      //Only ISO fields can store partial dates
+      $force = ($field['type'] != DATE_ISO);
+      $item[$from_field] = $from_date->format(date_type_format($field['type']), $force);
+      $item[$to_field] = $to_date->format(date_type_format($field['type']), $force);
       if (isset($form_values[$field_name]['rrule'])) {
         $item['rrule'] = $form_values[$field['field_name']]['rrule'];
       }
-      
+
       // Test a roundtrip back to the original timezone to catch
       // invalid dates, like 2AM on the day that spring daylight savings
       // time begins in the US.
-      $from_date->setTimezone(timezone_open($timezone), TRUE);
-      $to_date->setTimezone(timezone_open($timezone), TRUE);
+      $from_date->setTimezone($timezone);
+      $to_date->setTimezone($timezone);
+      
       if ($test_from != $from_date->format('r')) {
         $errors[] = t('The From date is invalid.');
       }

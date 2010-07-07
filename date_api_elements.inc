@@ -146,7 +146,7 @@ function date_text_element_process($element, $form_state, $form) {
   }
   elseif (!empty($element['#value'])) {
     // Value retrieved from database, in ISO format.
-    $date = new DateObject($element['#value'], $element['#date_timezone'], DATE_FORMAT_ISO);
+    $date = new DateObject($element['#value'], $element['#date_timezone'], date_type_format($element['#field']['type']));
     if (!($element['#date_flexible'] && $date->hasGranularity('year')) && !$date->hasGranularity($granularity)) {
       $date = NULL;
     }
@@ -490,7 +490,7 @@ function date_select_validate($element, &$form_state) {
   
   // If there are no errors and the value is valid, set it.
   if (empty($errors) && !empty($value)) {
-    form_set_value($element, $value, $form_state);
+    form_set_value($element, $value->format(DATE_FORMAT_ISO), $form_state);
   }
   else {
     form_set_value($element, NULL, $form_state);
@@ -505,8 +505,8 @@ function date_select_input_value($element) {
   $value = new DateObject($element['#value']);
   $value->limitGranularity($granularity);
 
-  if ($value->valid() && ($element['#date_flexible'] || $value->hasGranularity($granularity))) {
-    return $value->format(DATE_FORMAT_ISO);
+  if ($value->valid($granularity, $element['#date_flexible'])){
+    return $value;
   }
   return NULL;
 }
@@ -534,7 +534,7 @@ function date_text_validate($element, &$form_state) {
     form_error($element, t('%title is invalid.', array('%title' => $label))); 
   }
   elseif (!empty($value)) {
-    form_set_value($element, $value, $form_state);
+    form_set_value($element, $value->format(DATE_FORMAT_ISO), $form_state);
   }
 }
 
@@ -550,8 +550,8 @@ function date_text_input_value($element) {
   $value = new DateObject($input, NULL, $element['#date_format']);
   $value->limitGranularity($granularity);
 
-  if ($value->valid() && ($element['#date_flexible'] || $value->hasGranularity($granularity))) {
-    return $value->format(DATE_FORMAT_ISO);
+  if ($value->valid($granularity, $element['#date_flexible'])){
+    return $value;
   }
   return NULL;
 }

@@ -393,7 +393,7 @@ function date_popup_input_value($element, $auto_complete = FALSE) {
 
   $value->limitGranularity($granularity);
 
-  if ($value->valid() && ($element['#date_flexible'] || $value->hasGranularity($granularity))) {
+  if ($value->valid($granularity, $element['#date_flexible'])) {
     return $value->format(DATE_FORMAT_ISO);
   }
   return NULL;

@@ -132,6 +132,9 @@ class DateObject extends DateTime {
         $el = array_pop($ag);
         $format = date_limit_format($format, $ag);
       }
+      if($el == 'year') {
+        return FALSE;
+      }
     } else {
       // PHP < 5.3 doesn't like the GMT- notation for parsing timezones.
       $time = str_replace("GMT-", "-", $time);
@@ -195,6 +198,7 @@ class DateObject extends DateTime {
       parent::setTimezone($tz);
       $this->setDate($arr['year'], $arr['month'], $arr['day']);
       $this->setTime($arr['hour'], $arr['minute'], $arr['second']);
+      $this->addGranularity('timezone');
       return;
     }
     parent::setTimezone($tz);
@@ -256,8 +260,8 @@ class DateObject extends DateTime {
     return in_array($g, $this->granularity);
   }
   
-  public function valid() {
-    return $this->hasGranularity();
+  public function valid($granularity = NULL, $flexible = FALSE) {
+    return $this->hasGranularity() && (!$granularity || $flexible || $this->hasGranularity($granularity));
   }
 
   /**
@@ -270,9 +274,12 @@ class DateObject extends DateTime {
     return $this->hasGranularity('hour');
   }
 
+  /**
+   * In common usage we should not unset timezone through this.
+   */
   public function limitGranularity($gran) {
     foreach($this->granularity AS $key => $val){
-      if (!in_array($val, $gran)) {
+      if ($val != 'timezone' && !in_array($val, $gran)) {
         unset($this->granularity[$key]);
       }
     }
@@ -320,46 +327,51 @@ class DateObject extends DateTime {
     $regex1 = str_replace('a', '(.)', $regex1);
     preg_match('`^' . $regex1 . '$`', stripslashes($format), $letters);
     array_shift($letters);
-
     // extract values
     $regex2 = preg_replace($patterns, $repl2, $format_regexp, 1);
     $regex2 = str_replace('A', '(AM|PM)', $regex2);
     $regex2 = str_replace('a', '(am|pm)', $regex2);
     preg_match('`^' . $regex2 . '$`', $date, $values);
     array_shift($values);
-
     // if we did not find all the values for the patterns in the format, abort
     if (count($letters) != count($values)) {
       return FALSE;
     }
-    $final_date = array('hour' => '', 'minute' => '', 'second' => '',
-      'month' => '', 'day' => '', 'year' => '');
+    $this->granularity = array();
+    $final_date = array('hour' => 0, 'minute' => 0, 'second' => 0,
+      'month' => 1, 'day' => 1, 'year' => 0);
     foreach ($letters as $i => $letter) {
       $value = $values[$i];
       switch ($letter) {
         case 'd':
         case 'j':
           $final_date['day'] = intval($value);
+          $this->addGranularity('day');
           break;
         case 'n':
         case 'm':
           $final_date['month'] = intval($value);
+          $this->addGranularity('month');
           break;
         case 'F':
           $array_month_long = array_flip(date_month_names());
           $final_date['month'] = $array_month_long[$value];
+          $this->addGranularity('month');
           break;
         case 'M':
           $array_month = array_flip(date_month_names_abbr());
           $final_date['month'] = $array_month[$value];
+          $this->addGranularity('month');
           break;
         case 'Y':
           $final_date['year'] = $value;
+          $this->addGranularity('year');
           break;
         case 'y':
           $year = $value;
           // if no century, we add the current one ("06" => "2006")
           $final_date['year'] = str_pad($year, 4, substr(date("Y"), 0, 2), STR_PAD_LEFT);
+          $this->addGranularity('year');
           break;
         case 'a':
         case 'A':
@@ -370,12 +382,15 @@ class DateObject extends DateTime {
         case 'G':
         case 'H':
           $final_date['hour'] = intval($value);
+          $this->addGranularity('hour');
           break;
         case 'i':
           $final_date['minute'] = intval($value);
+          $this->addGranularity('minute');
           break;
         case 's':
           $final_date['second'] = intval($value);
+          $this->addGranularity('second');
           break;
         case 'U':
           parent::__construct($value, $tz ? $tz : new DateTimeZone("UTC"));
@@ -390,16 +405,6 @@ class DateObject extends DateTime {
     }
     // Blank becomes current time, given TZ.
     parent::__construct('', $tz ? $tz : new DateTimeZone("UTC"));
-    $this->granularity = array();
-    // there is some time, all will be set.
-    foreach (self::$allgranularity AS $g) {
-      if (isset($final_date[$g]) && is_numeric($final_date[$g])) {
-        $this->granularity[] = $g;
-      } else {
-        //avoid errors on setDate and setTime now that we know our granularity
-        $final_date[$g] = 0;
-      }
-    }
     if ($tz) {
       $this->addGranularity('timezone');
     }
@@ -502,6 +507,22 @@ class DateObject extends DateTime {
       }
     }
     return NULL;
+  }
+}
+
+/**
+ * Helper function for getting the format string for a date type.
+ */
+function date_type_format($type) {
+  switch ($type) {
+    case DATE_ISO:
+      return DATE_FORMAT_ISO;
+    case DATE_UNIX:
+      return DATE_FORMAT_UNIX;
+    case DATE_DATETIME:
+      return DATE_FORMAT_DATETIME;
+    case DATE_ICAL:
+      return DATE_FORMAT_ICAL;
   }
 }
 
@@ -785,7 +806,7 @@ function date_format_patterns($strict = FALSE) {
     'j' => '\d{1,2}',    'N' => '\d',      'S' => '\w{2}',
     'w' => '\d',       'z' => '\d{1,3}',    'W' => '\d{1,2}',
     'n' => '\d{1,2}',  't' => '\d{2}',      'L' => '\d',      'o' => '\d{4}',
-    'Y' => '-?\d{1,2,3,4,5,6}',    'y' => '\d{2}',      'B' => '\d{3}',   'g' => '\d{1,2}',
+    'Y' => '-?\d{1,6}',    'y' => '\d{2}',      'B' => '\d{3}',   'g' => '\d{1,2}',
     'G' => '\d{1,2}',  'e' => '\w*',        'I' => '\d',      'T' => '\w*',
     'U' => '\d*',      'z' => '[+-]?\d*',   'O' => '[+-]?\d{4}',
     //Using S instead of w and 3 as well as 4 to pick up non-ASCII chars like German umlaute
