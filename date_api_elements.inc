@@ -140,14 +140,14 @@ function date_text_element_process($element, $form_state, $form) {
   // Views exposed filters.
   if (!empty($edit) && is_array($edit) && !empty($edit['date'])) {
     $date = new DateObject($edit['date'], $element['#date_timezone'], $element['#date_format']);
-    if (!($element['#date_flexible'] && $date->hasGranularity('year')) && !$date->hasGranularity($granularity)) {
+    if (!$date->valid($granularity, $element['#date_flexible'])) {
       $date = NULL;
     }
   }
   elseif (!empty($element['#value'])) {
     // Value retrieved from database, in ISO format.
     $date = new DateObject($element['#value'], $element['#date_timezone'], date_type_format($element['#field']['type']));
-    if (!($element['#date_flexible'] && $date->hasGranularity('year')) && !$date->hasGranularity($granularity)) {
+    if (!$date->valid($granularity, $element['#date_flexible'])) {
       $date = NULL;
     }
   }
