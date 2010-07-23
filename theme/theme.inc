@@ -241,6 +241,8 @@ function template_preprocess_date_views_filter_form(&$vars) {
   $vars['adjustment'] = drupal_render($form['valueadjustment']);
   $vars['minadjustment'] = drupal_render($form['minadjustment']);
   $vars['maxadjustment'] = drupal_render($form['maxadjustment']);
+  //@TODO TEMPORARY FIX TO PREVENT CRASH
+  unset($form['#theme']);
   $vars['description'] = drupal_render($form['description']) . drupal_render($form);
 }
 

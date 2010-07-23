@@ -435,7 +435,7 @@ class date_sql_handler {
       $value = $this->sql_field($value, $adjustment);
     }    
     elseif ($type == 'DATE') {
-      $date = new DateObject($value, date_default_timezone(), DATE_DATETIME);
+      $date = new DateObject($value, date_default_timezone(), DATE_FORMAT_DATETIME);
       if (!empty($adjustment)) {
         date_modify($date, $adjustment . ' seconds');
       }

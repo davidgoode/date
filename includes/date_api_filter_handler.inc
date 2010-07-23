@@ -68,11 +68,6 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     $options['year_range'] = array('default' => '-3:+3');
     return $options;
   }
-  
-  function option_definition() {
-    $options = parent::option_definition();
-    return $options;
-  }
 
   /**
    * Set the granularity of the date parts to use in the filter.
@@ -128,7 +123,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     $fields = date_api_fields($this->definition['base']);
     $options = array();
     foreach ($fields['name'] as $name => $field) {
-      $options[$name] = $instance['label'];
+      $options[$name] = $instance['label'] ? $instance['label'] : $name;
     }
     $form['date_fields'] = array(
       '#title' => t('Date field(s)'),
@@ -192,7 +187,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     }
 
     $handler = $this->date_handler;
-       
+
     if ($which == 'all' || $which == 'value') {
       $form['value'] += $this->date_parts_form($form_state, 'value', $source, $which, $this->operator_values(1));
       if ($this->force_value) {
@@ -208,7 +203,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
         $form['value']['max']['#force_value'] = TRUE;
       }
     }
-    
+
     // Add some text to make it clear when additional options are available.
     $extra = t("You can use any values PHP's date_create() can understand, like between '12AM today' and '12AM tomorrow.");
     $form['value']['value']['#prefix'] = '<div class="form-item"><label>' . t('Absolute value') . '</label></div>';
@@ -236,6 +231,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       unset($form['value']['value']['#prefix']);
     }
     
+    // @TODO THIS FUNCTION CRASHES DRUPAL WITH A MEMORY OVERFLOW ERROR!!!!!
     $form['value']['#theme'] = 'date_views_filter_form';  
   }
 
@@ -276,7 +272,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     }
     $format = $this->date_handler->views_formats($this->options['granularity'], 'sql');
     $granularity = array_keys($this->date_handler->date_parts($this->options['granularity']));
-    
+
     // Don't set a default date in the UI, only in the exposed form.
     $default_date = '';
     if (!empty($form_state['exposed'])) {
@@ -293,7 +289,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     );
     if ($which == 'all') {
       $dependency = array(
-        '#process' => array($type . '_process', 'views_process_dependency'),
+        '#process' => array($type . '_element_process', 'views_process_dependency'),
         '#dependency' => array($source => $operator_values),
       );
       $form[$prefix] += $dependency;
@@ -491,10 +487,10 @@ class date_api_filter_handler extends views_handler_filter_numeric {
         
     $this->min_date = $min_date;
     $this->max_date = $max_date;
-    $this->year = date_format($date, 'Y');
-    $this->month = date_format($date, 'n');
-    $this->day = date_format($date, 'j');
-    $this->week = date_week(date_format($date, DATE_FORMAT_DATE));
+    $this->year = $date->format('Y');
+    $this->month = $date->format('n');
+    $this->day = $date->format('j');
+    $this->week = date_week($date->format(DATE_FORMAT_DATE, true));
     $this->date_handler = $date_handler;
         
     if ($this->date_handler->granularity == 'week') {
