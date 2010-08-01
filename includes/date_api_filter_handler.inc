@@ -131,7 +131,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       '#options' => $options,
       '#default_value' => $this->options['date_fields'],
       '#multiple' => FALSE,
-      '#description' => t('Select date field(s) to filter with this argument.'),
+      '#description' => "<pre>".print_r($fields, true)."</pre>",//t('Select date field(s) to filter with this argument.'),
     );
     $form['date_method'] = array(
       '#title' => t('Method'),
@@ -231,7 +231,6 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       unset($form['value']['value']['#prefix']);
     }
     
-    // @TODO THIS FUNCTION CRASHES DRUPAL WITH A MEMORY OVERFLOW ERROR!!!!!
     $form['value']['#theme'] = 'date_views_filter_form';  
   }
 
@@ -287,13 +286,10 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       '#date_label_position' => 'within',
       '#date_year_range' => $this->options['year_range'],
     );
-    if ($which == 'all') {
-      $dependency = array(
-        '#process' => array($type . '_element_process', 'views_process_dependency'),
-        '#dependency' => array($source => $operator_values),
-      );
-      $form[$prefix] += $dependency;
-    }
+    $dependency = array(
+      '#process' => array($type . '_element_process'),
+    );
+    $form[$prefix] += $dependency;
     return $form;
   }
 
@@ -388,7 +384,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       $form_state['values'][$this->options['expose']['identifier']] = $default;
     }
   }
-   
+  
   /**
    * Custom implementation of query() so we can get the
    * AND and OR methods in the right places.

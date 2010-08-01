@@ -2,7 +2,7 @@
 /*****
 Preliminary flexible granularity filter, not yet configured to be used by views.
 ******/
-class date_api_filter_flexible_handler extends date_api_filter_handler {
+class date_api_filter_single_handler extends views_handler_filter_numeric {
 
   /**
    * Custom implementation of query() so we can get the

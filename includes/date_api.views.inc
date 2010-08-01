@@ -45,6 +45,9 @@ function date_api_views_handlers() {
       'date_api_filter_handler' => array(
         'parent' => 'views_handler_filter_numeric',
       ),
+      'date_api_filter_single_handler' => array(
+        'parent' => 'views_handler_filter_numeric',
+      ),
     ),
   );
 }
@@ -126,7 +129,7 @@ function date_api_views_data() {
   $tables = module_invoke_all('date_api_tables');
   
   foreach ($tables as $base_table) {
-    // The flexible date argument.
+    // The date argument.
     $data[$base_table]['date_argument'] = array(
       'group' => t('Date'),
       'title' => t('Date (!base_table)', array('!base_table' => $base_table)),
@@ -137,7 +140,7 @@ function date_api_views_data() {
         'base' => $base_table,
       ),
     );  
-    // The flexible date filter.
+    // The date filter.
     $data[$base_table]['date_filter'] = array(
       'group' => t('Date'),
       'title' => t('Date (!base_table)', array('!base_table' => $base_table)),
@@ -147,7 +150,7 @@ function date_api_views_data() {
         'empty name field' => t('Undated'),
         'base' => $base_table,
       ),
-    ); 
+    );
   }
   return $data;
 }
