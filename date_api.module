@@ -118,7 +118,7 @@ class DateObject extends DateTime {
         }
       }
       $time = $datetime;
-      $format = DATE_ISO;
+      $format = DATE_FORMAT_ISO;
     }
     // Allow string timezones
     if (!empty($tz) && !is_object($tz)) {
@@ -394,6 +394,13 @@ class DateObject extends DateTime {
           break;
         case 'U':
           parent::__construct($value, $tz ? $tz : new DateTimeZone("UTC"));
+          $this->addGranularity('year');
+          $this->addGranularity('month');
+          $this->addGranularity('day');
+          $this->addGranularity('hour');
+          $this->addGranularity('minute');
+          $this->addGranularity('second');
+          return $this;
           break;
       }
     }
