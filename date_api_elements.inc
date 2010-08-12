@@ -146,7 +146,7 @@ function date_text_element_process($element, $form_state, $form) {
   }
   elseif (!empty($element['#value'])) {
     // Value retrieved from database, in ISO format.
-    $date = new DateObject($element['#value'], $element['#date_timezone'], date_type_format($element['#field']['type']));
+    $date = new DateObject($element['#value']['date'], $element['#date_timezone'], date_type_format($element['#field']['type']));
     if (!$date->valid($granularity, $element['#date_flexible'])) {
       $date = NULL;
     }
@@ -487,7 +487,6 @@ function date_select_validate($element, &$form_state) {
     array_unshift($errors, t('Field %field has errors.', array('%field' => $label)));
     form_set_error($error_field, implode(' ', $errors));
   }
-  
   // If there are no errors and the value is valid, set it.
   if (empty($errors) && !empty($value)) {
     form_set_value($element, $value->format(DATE_FORMAT_ISO), $form_state);
@@ -504,7 +503,6 @@ function date_select_input_value($element) {
   $granularity = date_format_order($element['#date_format']);
   $value = new DateObject($element['#value']);
   $value->limitGranularity($granularity);
-
   if ($value->valid($granularity, $element['#date_flexible'])){
     return $value;
   }
@@ -546,7 +544,6 @@ function date_text_input_value($element) {
   $granularity = date_format_order($element['#date_format']);
   $input = $form_values['date'];
   if (!$element['#required'] && trim($input) == '') return NULL;
-
   $value = new DateObject($input, NULL, $element['#date_format']);
   $value->limitGranularity($granularity);
 

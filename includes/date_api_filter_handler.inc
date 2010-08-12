@@ -131,7 +131,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       '#options' => $options,
       '#default_value' => $this->options['date_fields'],
       '#multiple' => FALSE,
-      '#description' => "<pre>".print_r($fields, true)."</pre>",//t('Select date field(s) to filter with this argument.'),
+      '#description' => t('Select date field(s) to filter with this argument.'),
     );
     $form['date_method'] = array(
       '#title' => t('Method'),
