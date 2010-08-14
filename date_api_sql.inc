@@ -1,11 +1,11 @@
 <?php
-// $Id: date_api_sql.inc,v 1.21 2010/03/29 00:42:11 karens Exp $
+// $Id: date_api_sql.inc,v 1.24 2010/08/12 00:27:03 karens Exp $
 
 /**
  * @file
  * SQL helper for Date API.
  */
-
+  
 /**
  *  A helper function to do cross-database concatation of date parts
  *
@@ -13,8 +13,7 @@
  *  @return - correct sql string for database type
  */
 function date_sql_concat($array) {
-  global $db_type;
-  switch ($db_type) {
+  switch (date_db_type()) {
     case ('mysql'):
     case ('mysqli'):
       return "CONCAT(" . implode(",", $array) . ")";
@@ -30,8 +29,7 @@ function date_sql_concat($array) {
  * @return SQL statement to return the first non-NULL value in the list.
  */
 function date_sql_coalesce($array) {
-  global $db_type;
-  switch ($db_type) {
+  switch (date_db_type()) {
     case ('mysql'):
     case ('mysqli'):
     case ('pgsql'):
@@ -82,7 +80,6 @@ class date_sql_handler {
   }
 
   function get_db_type() {
-    global $db_type;
     return $GLOBALS['databases']['default']['default']['driver'];
   }
   
@@ -184,7 +181,7 @@ class date_sql_handler {
             $field = "FROM_UNIXTIME($field)";
             break;
           case DATE_ISO:
-            $field = "STR_TO_DATE($field, '%Y-%m-%%dT%T')";
+            $field = "STR_TO_DATE($field, '%Y-%m-%dT%T')";
             break;
           case DATE_DATETIME:
             break;
@@ -328,10 +325,10 @@ class date_sql_handler {
         $replace = array(
           'Y' => '%Y', 'y' => '%y',
           'm' => '%m', 'n' => '%c',
-          'd' => '%%d', 'j' => '%e',
+          'd' => '%d', 'j' => '%e',
           'H' => '%H',
           'i' => '%i',
-          's' => '%%s',
+          's' => '%s',
           '\WW' => 'W%U',
           );
         $format = strtr($format, $replace);

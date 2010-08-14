@@ -1,6 +1,5 @@
 <?php
-// $Id: date_api.views.inc,v 1.12 2010/03/29 00:42:11 karens Exp $
-
+// $Id: date_api.views.inc,v 1.15 2010/08/12 00:54:42 karens Exp $
 /**
  * @file
  * Defines date-related Views data and plugins:
@@ -188,8 +187,7 @@ function date_api_fields($base = 'node', $reset = FALSE) {
  * value to compare to the local value.
  */
 function date_views_set_timezone(&$date_handler, &$view, $field) {
-  $tz_handling  = $field['settings']['tz_handling'];
-  switch ($tz_handling) {
+  switch ($field['tz_handling']) {
     case 'date' :
       $date_handler->db_timezone = 'UTC';
       $date_handler->local_timezone_field = $field['timezone_field'];
@@ -224,7 +222,7 @@ function date_views_querystring($view, $extra_params = array()) {
   if (empty($extra_params['view'])) {
     $exclude[] = 'view';
   }
-  $query = drupal_query_string_encode($query_params, $exclude);
+  $query = drupal_http_build_query(drupal_get_query_parameters($query_params, $exclude));
   // To prevent an empty query string from adding a "?" on to the end of a URL,
   // we return NULL.
   return !empty($query) ? $query : NULL;

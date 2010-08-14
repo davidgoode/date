@@ -1,5 +1,5 @@
 <?php
-// $Id: date.views.inc,v 1.7 2010/03/05 13:05:49 karens Exp $
+// $Id: date.views.inc,v 1.8 2010/08/04 23:06:30 karens Exp $
 /**
  * @file
  * Date Views code.
@@ -28,7 +28,6 @@ function date_field_views_data($field) {
     if (!isset($field_types[$field['type']])) {
       return;
     }
-
     $data = array();
 
     $current_table = _field_sql_storage_tablename($field);
@@ -211,6 +210,5 @@ function date_field_views_data($field) {
         }
       }
     }
-//drupal_set_message("DATEVIEWS: <pre>".print_r($data,true)."</pre>");
     return $data;
   }

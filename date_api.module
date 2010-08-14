@@ -1,5 +1,5 @@
 <?php
-// $Id: date_api.module,v 1.81 2010/04/13 20:16:51 karens Exp $
+// $Id: date_api.module,v 1.87 2010/08/12 01:15:46 karens Exp $
 /**
  * @file
  * This module will make the date API available to other modules.
@@ -517,6 +517,10 @@ class DateObject extends DateTime {
   }
 }
 
+function date_db_type() {
+  return $GLOBALS['databases']['default']['default']['driver'];
+}
+
 /**
  * Helper function for getting the format string for a date type.
  */
@@ -538,6 +542,25 @@ function date_type_format($type) {
  */
 function date_api_init() {
   drupal_add_css(drupal_get_path('module', 'date_api') . '/date.css', array('weight' => CSS_THEME));
+}
+
+/**
+ * Create a 'datetime' field type.
+ */
+function date_api_schema_alter(&$schema) {
+  foreach ($schema as &$table) {
+    foreach ($table['fields'] as &$field) {
+      if ($field['type'] == 'datetime') {
+        $field += array('mysql_type' => 'DATETIME', 'pgsql_type' => 'timestamp without time zone');
+      }
+      elseif ($field['type'] == 'date') {
+        $field += array('mysql_type' => 'DATE', 'pgsql_type' => 'date');
+      }
+      elseif ($field['type'] == 'time') {
+        $field += array('mysql_type' => 'TIME', 'pgsql_type' => 'time without time zone');
+      }
+    }
+  }
 }
 
 /**
@@ -857,11 +880,6 @@ function date_timezone_names($required = FALSE, $refresh = FALSE) {
     $zonenames = !empty($cached) ? $cached->data : array();
     if ($refresh || empty($cached) || empty($zonenames)) {
       $data = timezone_identifiers_list();
-      // Use include instead of include once in case the function gets 
-      // refreshed via devel or other API and is called more than once.
-      if (module_exists('date_php4')) {
-        include(' ./' . drupal_get_path('module', 'date_php4') . '/date_php4_missing_data.inc');
-      }
       foreach ($data as $delta => $zone) {
         // Because many time zones exist in PHP only for backward 
         // compatibility reasons and should not be used, the list is 
@@ -1544,7 +1562,7 @@ function date_api_theme() {
     'path' => "$path/theme",
   );
   return array(
-    'date_nav_title' => $base + array('variables' => array('type' => NULL, 'view' => NULL)),
+    'date_nav_title' => $base + array('variables' => array('granularity' => NULL, 'view' => NULL, 'link' => NULL)),
     'date_vcalendar' => $base + array('variables' => array('events' => NULL, 'calname' => NULL)),
     'date_vevent' => $base + array('variables' => array('event' => NULL)),
     'date_valarm' => $base + array('variables' => array('alarm' => NULL)),
@@ -1801,7 +1819,7 @@ function date_querystring($view, $extra_params = array()) {
   }
   // Filter the special "q" and "view" variables out of the query string.
   $exclude = array('q');
-  $query = drupal_query_string_encode($query_params, $exclude);
+  $query = drupal_http_build_query(drupal_get_query_parameters($query_params, $exclude));
   // To prevent an empty query string from adding a "?" on to the end of a URL,
   // we return NULL.
   return !empty($query) ? $query : NULL;
@@ -1895,51 +1913,4 @@ function date_api_database_info($field) {
   $revision_table = _field_sql_storage_revision_tablename($field);
   $db_info['table'] = $current_table;
   return $db_info;
-}
-
-/**
- * Embed a view using a PHP snippet.
- *
- * This function is meant to be called from PHP snippets, should one wish to
- * embed a view in a node or something. It's meant to provide the simplest
- * solution and doesn't really offer a lot of options, but breaking the function
- * apart is pretty easy, and this provides a worthwhile guide to doing so.
- *
- * Note that this function does NOT display the title of the view. If you want
- * to do that, you will need to do what this function does manually, by
- * loading the view, getting the preview and then getting $view->get_title().
- *
- * @param $name
- *   The name of the view to embed.
- * 
- * @param $display_id
- *   'calendar_1' will display the calendar page, 
- *   'calendar_block_1' will display the calendar block.
- * 
- * @param $settings
- *   an array of view settings to use to override view default values;
- * 
- *   Include a setting for 'block_identifier, the identifier to use 
- *   for this embedded view. All embedded views that use the same 
- *   identifier will move together, or provide different identifiers 
- *   to keep them independent. The identifier will be used in the url 
- *   as a querystring, like: node/27?mini=calendar/2008-10.
- * 
- * @param ...
- *   Any additional parameters will be passed as arguments.
- */
-function date_embed_view($name, $display_id = 'default', $settings = array(), $args = array()) {
-  $view = views_get_view($name);
-  if (!$view) {
-    return;
-  }
-  if (!empty($settings)) {
-    foreach ($settings as $key => $setting) {
-      $view->$key = $setting;
-    }
-  }
-  if (!isset($view->date_info->block_identifier)) {
-    $view->date_info->block_identifier = 'mini';
-  }
-  return $view->preview($display_id, $args);
 }
