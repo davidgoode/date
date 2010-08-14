@@ -1,5 +1,5 @@
 <?php
-// $Id: date_elements.inc,v 1.78 2010/07/29 11:27:40 karens Exp $
+// $Id: date_elements.inc,v 1.79 2010/08/12 20:07:27 karens Exp $
 /**
  * @file
  * Date forms and form themes and validation.
@@ -20,24 +20,26 @@ function _date_field_validate($entity_type, $entity, $field, $instance, $langcod
   // dates or nothing, no extra validation needed.
   if (!form_get_errors()) {
     foreach ($items as $delta => $item) {
-      $process = date_process_values($field, $instance);
-      foreach ($process as $processed) {
-        if ($processed == 'value' && $field['settings']['todate']
-          && !$item['value']
-          && $item['value2']) {
-          $errors[$field['field_name']][$langcode][$delta][] = array(
+      if (is_array($item)) {
+        $process = date_process_values($field, $instance);
+        foreach ($process as $processed) {
+          if ($processed == 'value' && $field['settings']['todate']
+            && !$item['value']
+            && $item['value2']) {
+            $errors[$field['field_name']][$langcode][$delta][] = array(
               'error' => 'valid_nid',
               'message' => t("A 'From date' date is required for field %field %delta.", array('%delta' => $field['cardinality'] ? intval($delta + 1) : '', '%field' => t($instance['widget']['label']))),
             );
-        }
-        if ($processed == 'value2'
-          && $field['settings']['todate'] == 'required' && ($field['required']
-          && $item['value']
-          && !$item['value2'])) {
-          $errors[$field['field_name']][$langcode][$delta][] = array(
-            'error' => 'valid_nid',
-            'message' => t("A 'To date' is required for field %field %delta.", array('%delta' => $field['cardinality'] ? intval($delta + 1) : '', '%field' => t($instance['label']))),
-            );          
+          }
+          if ($processed == 'value2'
+            && $field['settings']['todate'] == 'required' && ($field['required']
+            && $item['value']
+            && !$item['value2'])) {
+            $errors[$field['field_name']][$langcode][$delta][] = array(
+              'error' => 'valid_nid',
+              'message' => t("A 'To date' is required for field %field %delta.", array('%delta' => $field['cardinality'] ? intval($delta + 1) : '', '%field' => t($instance['label']))),
+              );
+          }
         }
       }
     }
@@ -57,9 +59,11 @@ function _date_field_update($entity_type, $entity, $field, $instance, $langcode,
   $values = $items;
   foreach ($values as $delta => $item) {
     $timezone = isset($item['timezone']) ? $item['timezone'] : '';
-    $items[$delta]['timezone'] = date_get_timezone($field['settings']['tz_handling'], $timezone);
-    $items[$delta]['timezone_db'] = date_get_timezone_db($field['settings']['tz_handling']);
-    $items[$delta]['date_type'] = $field['type'];
+    if (is_array($item)) {
+      $items[$delta]['timezone'] = date_get_timezone($field['settings']['tz_handling'], $timezone);
+      $items[$delta]['timezone_db'] = date_get_timezone_db($field['settings']['tz_handling']);
+      $items[$delta]['date_type'] = $field['type'];
+    }
   }
   $entity->$field['field_name'][$langcode] = $items;
 }

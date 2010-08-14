@@ -1,5 +1,5 @@
 <?php
-// $Id: date_api_filter_handler.inc,v 1.15 2010/08/11 22:36:49 karens Exp $
+// $Id: date_api_filter_handler.inc,v 1.17 2010/08/12 22:32:34 karens Exp $
 
 /**
  * @file
@@ -35,6 +35,8 @@ class date_api_filter_handler extends views_handler_filter_numeric {
     $handler->granularity = isset($options['granularity']) ? $options['granularity'] : 'day';
     $handler->adjustment_field = isset($options['adjustment_field']) ? $options['adjustment_field'] : 0;
     
+    if (empty($this->view->date_info)) $this->view->date_info = new stdClass();
+    
     // Set the view range, do this only if not already set in case there are multiple date arguments.
     if (empty($this->view->date_info->min_allowed_year)) {
       $range = date_range_years($this->options['year_range']);
@@ -59,7 +61,7 @@ class date_api_filter_handler extends views_handler_filter_numeric {
   // Set default values for the date filter.
   function option_definition() {
     $options = parent::option_definition();
-    $options['date_fields'] = array('default' => '');
+    $options['date_fields'] = array('default' => array());
     $options['date_method'] = array('default' => 'OR');
     $options['granularity'] = array('default' => 'day');
     $options['form_type'] = array('default' => 'date_select');
@@ -403,14 +405,30 @@ class date_api_filter_handler extends views_handler_filter_numeric {
       $form_state['values'][$this->options['expose']['identifier']] = $default;
     }
   }
-  
+
+  /**
+   * Called just prior to query(), this lets us set up table aliases for
+   * relationships. This can't be done in pre_query(), because the relationship
+   * isn't defined yet.
+   */
+  function set_relationship() {
+    parent::set_relationship();
+    $this->get_query_fields();
+    if (!empty($this->query_fields)) {
+      foreach ($this->query_fields as $query_field) {
+        $field = $query_field['field'];
+        $this->related_table_alias = $this->query->queue_table($field['table_name'], $this->relationship);
+      }
+    }
+  }
+
   /**
    * Custom implementation of query() so we can get the
    * AND and OR methods in the right places.
    */
   function query() {
-    $this->ensure_my_table();
-    $this->get_query_fields();
+    //$this->ensure_my_table();
+    //$this->get_query_fields();
     if (!empty($this->query_fields)) {
       foreach ((array) $this->query_fields as $query_field) {
         $field = $query_field['field'];

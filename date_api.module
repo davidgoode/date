@@ -1,5 +1,5 @@
 <?php
-// $Id: date_api.module,v 1.87 2010/08/12 01:15:46 karens Exp $
+// $Id: date_api.module,v 1.98 2010/08/13 14:36:12 karens Exp $
 /**
  * @file
  * This module will make the date API available to other modules.
@@ -97,6 +97,8 @@ class DateObject extends DateTime {
     
     if (is_array($time)) {
       // Assume we were passed an indexed array
+      // Add empty values to avoid errors
+      $time += array('year' => '', 'month' => '', 'day' => '', 'hour' => '', 'minute' => '', 'second' => '');
       $datetime = '';
       if ($time['year'] !== '') {
         $datetime = date_pad(intval($time['year']), 4);
@@ -260,6 +262,7 @@ class DateObject extends DateTime {
     return in_array($g, $this->granularity);
   }
   
+  // whether a date is valid for a given $granularity array, depending on if it's allowed to be flexible.
   public function valid($granularity = NULL, $flexible = FALSE) {
     return $this->hasGranularity() && (!$granularity || $flexible || $this->hasGranularity($granularity));
   }
@@ -541,6 +544,7 @@ function date_type_format($type) {
  * Implement hook_init().
  */
 function date_api_init() {
+  date_default_timezone_set(date_default_timezone());
   drupal_add_css(drupal_get_path('module', 'date_api') . '/date.css', array('weight' => CSS_THEME));
 }
 
@@ -880,6 +884,7 @@ function date_timezone_names($required = FALSE, $refresh = FALSE) {
     $zonenames = !empty($cached) ? $cached->data : array();
     if ($refresh || empty($cached) || empty($zonenames)) {
       $data = timezone_identifiers_list();
+      asort($data);
       foreach ($data as $delta => $zone) {
         // Because many time zones exist in PHP only for backward 
         // compatibility reasons and should not be used, the list is 
@@ -945,7 +950,7 @@ function date_timezone_abbr($refresh = FALSE) {
  * @return translated value of the string
  */
 function date_t($string, $context, $langcode = NULL) {
-  //static $replace = array();
+  static $replace = array();
   
   if (empty($replace[$langcode])) {
     // The function to create the date string arrays is kept separate
@@ -1090,12 +1095,12 @@ function date_format_date($date, $type = 'medium', $format = '', $langcode = NUL
       case '\\':
         $datestring .= $format[++$i];
         break;
+      case 'r':
+        $datestring .= date_format_date($date, 'custom', 'D, d M Y H:i:s O', $langcode);
+        break;        
       default:
-        if (strpos('BdcgGhHiIjLmnsStTUwWYyz', $c) !== FALSE) {
+        if (strpos('BdcgGhHiIjLmnNosStTuUwWYyz', $c) !== FALSE) {
           $datestring .= $date->format($c);
-        }
-        elseif ($c == 'r') {
-          $datestring .= format_date($date, 'custom', 'D, d M Y H:i:s O', $langcode);
         }
         else {
           $datestring .= $c;
@@ -1280,6 +1285,9 @@ function date_day_of_week_name($date = NULL, $abbr = TRUE, $type = DATE_DATETIME
  * chosen first day of week for this site.
  */
 function date_week_range($week, $year) {
+  if (variable_get('date_api_use_iso8601', FALSE)) {
+    return date_iso_week_range($week, $year);
+  }
   $min_date = new DateObject($year . '-01-01 00:00:00', date_default_timezone());
   $min_date->setTimezone(date_default_timezone());
 
@@ -1287,7 +1295,7 @@ function date_week_range($week, $year) {
   date_modify($min_date, '+' . strval(7 * ($week - 1)) . ' days');
 
   // move backwards to the first day of the week
-  $first_day = variable_get('date_first_day', 0);
+  $first_day = variable_get('date_first_day', 1);
   $day_wday = date_format($min_date, 'w');
   date_modify($min_date, '-' . strval((7 + $day_wday - $first_day) % 7) . ' days');
 
@@ -1298,6 +1306,29 @@ function date_week_range($week, $year) {
   if (date_format($min_date, 'Y') != $year) {
     $min_date = new DateObject($year . '-01-01 00:00:00', date_default_timezone());
   }
+  return array($min_date, $max_date);
+}
+
+/** 
+ * Start and end dates for an ISO week.
+ */
+function date_iso_week_range($week, $year) {
+  
+  // Get to the first ISO week of the year.
+  $min_date = date_make_date($year .'-01-01 00:00:00', date_default_timezone_name());
+  date_timezone_set($min_date, date_default_timezone());
+  
+  if (date_format($min_date, 'W') != 1) {
+    date_modify($min_date, '+1 Monday');
+  }
+  // Jump ahead to the desired week for the beginning of the week range.
+  if ($week > 1) {
+    date_modify($min_date, '+ '. ($week - 1) .' weeks');
+  }
+  
+  // move forwards to the last day of the week
+  $max_date = drupal_clone($min_date);
+  date_modify($max_date, '+7 days');
   return array($min_date, $max_date);
 }
 
@@ -1328,8 +1359,13 @@ function date_week($date) {
   $parts = explode('-', $date);
 
   $date = new DateObject($date . ' 12:00:00', 'UTC');
-  $year_date = new DateObject($parts[0] . '-01-01 12:00:00', 'UTC');
+  
+  // If we are using ISO weeks, this is easy.
+  if (variable_get('date_api_use_iso8601', FALSE)) {
+    return date_format($date, 'W');
+  }
 
+  $year_date = new DateObject($parts[0] . '-01-01 12:00:00', 'UTC');
   $week = intval(date_format($date, 'W'));
   $year_week = intval(date_format($year_date, 'W'));
   $date_year = intval(date_format($date, 'o'));
@@ -1346,7 +1382,7 @@ function date_week($date) {
   if ($year_week != 1) $week++;
 
   // convert to ISO-8601 day number, to match weeks calculated above
-  $iso_first_day = 1 + (variable_get('date_first_day', 0) + 6) % 7;
+  $iso_first_day = 1 + (variable_get('date_first_day', 1) + 6) % 7;
 
   // if it's before the starting day, it's the previous week
   if (intval(date_format($date, 'N')) < $iso_first_day) $week--;
@@ -1755,6 +1791,10 @@ function date_real_url($view, $date_type = NULL, $date_arg = NULL, $force_view_u
   $args = $view->args;
   $pos = $view->date_info->date_arg_pos;
   
+  // The View arguments array is indexed numerically but is not necessarily
+  // in numerical order. Sort the arguments to ensure the correct order.
+  ksort($args);
+    
   // If there are empty arguments before the date argument, 
   // pad them with the wildcard so the date argument will be in 
   // the right position.
@@ -1899,7 +1939,7 @@ function date_range_string($years) {
  * Implement hook_date_api_tables().
  */
 function date_api_date_api_tables() {
-  return array('node', 'comment', 'users');
+  return array('node', 'comments', 'users');
 }
 
 /**
@@ -1913,4 +1953,30 @@ function date_api_database_info($field) {
   $revision_table = _field_sql_storage_revision_tablename($field);
   $db_info['table'] = $current_table;
   return $db_info;
+}
+
+/**
+ * Implementation of hook_form_alter().
+ *
+ * Add a form element to configure whether or not week numbers are ISO-8601 (default: FALSE == US/UK/AUS norm).
+ */
+function date_api_form_system_date_time_settings_alter(&$form, $form_state, $form_id = 'system_date_time_settings') {
+  $form['locale']['date_api_use_iso8601'] = array(
+    '#type'          => 'checkbox',
+    '#title'         => t('Use ISO-8601 week numbers'),
+    '#default_value' => variable_get('date_api_use_iso8601', FALSE),
+    '#description'   => t('IMPORTANT! If checked, First day of week MUST be set to Monday'),
+  );
+  $form['#validate'][] = 'date_api_form_system_settings_validate';
+  $form = system_settings_form($form);
+}
+
+/**
+ * Validate that the option to use ISO weeks matches first day of week choice.
+ */
+function date_api_form_system_settings_validate(&$form, &$form_state) {
+  $form_values = $form_state['values'];
+  if ($form_values['date_api_use_iso8601'] && $form_values['date_first_day'] != 1) {
+    form_set_error('date_first_day', t('When using ISO-8601 week numbers, the first day of the week must be set to Monday.'));
+  }
 }

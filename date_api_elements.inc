@@ -1,5 +1,5 @@
 <?php
-// $Id: date_api_elements.inc,v 1.67 2010/07/29 09:30:55 karens Exp $
+// $Id: date_api_elements.inc,v 1.70 2010/08/13 15:46:19 karens Exp $
 /**
  * @file
  * Date API elements themes and validation.
@@ -146,7 +146,7 @@ function date_text_element_process($element, $form_state, $form) {
   }
   elseif (!empty($element['#value'])) {
     // Value retrieved from database, in ISO format.
-    $date = new DateObject($element['#value']['date'], $element['#date_timezone'], date_type_format($element['#field']['type']));
+    $date = new DateObject($element['#value'], $element['#date_timezone'], DATE_FORMAT_ISO);
     if (!$date->valid($granularity, $element['#date_flexible'])) {
       $date = NULL;
     }
@@ -159,9 +159,7 @@ function date_text_element_process($element, $form_state, $form) {
   $element['date']['#weight'] = !empty($element['date']['#weight']) ? $element['date']['#weight'] : $element['#weight'];
   $element['date']['#default_value'] = is_object($date) ? $date->format($element['#date_format']) : '';
   $element['date']['#attributes'] = array('class' => isset($element['#attributes']['class']) ? $element['#attributes']['class'] += array('date-date') : array('date-date'));
-  
-  $now_date = new DateObject("@".REQUEST_TIME);
-  $element['date']['#description'] = ' ' . t('Format: @date', array('@date' => $now_date->format($element['#date_format'])));
+  $element['date']['#description'] = ' ' . t('Format: @date', array('@date' => date_now()->format($element['#date_format'])));
   
   // Keep the system from creating an error message for the sub-element.
   // We'll set our own message on the parent element.
@@ -220,7 +218,7 @@ function date_select_element_process($element, $form_state, $form) {
   foreach (date_nongranularity($granularity) as $field) {
     if ($field != 'timezone') {
       $element[$field] = array(
-        '#type' => 'hidden',
+        '#type' => 'value',
         '#value' => 0,
         );
     }
@@ -349,9 +347,12 @@ function date_parts_element($element, $date, $format) {
   }
  
   // Views exposed filters are treated as submitted even if not,
-  // so force the #default value in that case.  
-  if (!empty($element[$field]['#force_value'])) {
-    $sub_element[$field]['#value'] = $sub_element[$field]['#default_value'];
+  // so force the #default value in that case. Make sure we set
+  // a default that is in the option list.
+  if (!empty($element['#force_value'])) {
+    $options = $sub_element[$field]['#options'];
+    $default = !empty($sub_element[$field]['#default_value']) ? $sub_element[$field]['#default_value'] : array_shift($options);
+    $sub_element[$field]['#value'] = $default;
   }
   
   if (($hours_format == 'g' || $hours_format == 'h') && date_has_time($granularity)) {
