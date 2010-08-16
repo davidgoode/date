@@ -270,12 +270,6 @@ function date_combo_element_process($element, &$form_state, $form) {
   $offset_field = 'offset';
   $offset_field2 = 'offset2';
 
-  if ($field['settings']['todate'] != 'required' 
-  && !empty($element['#default_value'][$to_field]) 
-  && $element['#default_value'][$to_field] == $element['#default_value'][$from_field]) {
-    unset($element['#default_value'][$to_field]);
-  }
-
   $element[$from_field] = array(
     '#field'         => $field,
     '#title'         => t($instance['label']),
@@ -336,6 +330,12 @@ function date_combo_element_process($element, &$form_state, $form) {
       $description .= ' ' . t("Empty 'To date' values will use the 'From date' values.");
     }
     $element['#fieldset_description'] = $description;
+    
+    if ($field['settings']['todate'] != 'required' 
+    && !empty($element[$to_field]['#default_value']) 
+    && $element[$to_field]['#default_value'] == $element[$from_field]['#default_value']) {
+      unset($element[$to_field]['#default_value']);
+    }
   }
   else {
     $element[$from_field]['#description'] = $description;
